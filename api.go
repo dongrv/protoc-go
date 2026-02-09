@@ -30,7 +30,8 @@ func CompileWithOptions(opts Options) (string, error) {
 		WithGoOpts(opts.GoOpts...).
 		WithGoGrpcOpts(opts.GoGrpcOpts...).
 		WithVerbose(opts.Verbose).
-		WithAutoDetectImports(opts.AutoDetectImports)
+		WithAutoDetectImports(opts.AutoDetectImports).
+		WithSmartFilter(opts.SmartFilter)
 
 	if opts.Context != nil {
 		compiler = compiler.WithContext(opts.Context)
@@ -73,6 +74,11 @@ type Options struct {
 	// dependencies and add necessary include paths.
 	AutoDetectImports bool
 
+	// SmartFilter enables automatic filtering of imported-only files.
+	// When enabled (default), the compiler will automatically filter out files
+	// that are only imported by other files, preventing duplicate compilation.
+	SmartFilter bool
+
 	// Context for cancellation and timeout.
 	// If nil, context.Background() is used.
 	Context context.Context
@@ -90,6 +96,7 @@ func NewOptions(opts ...Option) Options {
 		GoOpts:            []string{"paths=source_relative"},
 		GoGrpcOpts:        []string{"paths=source_relative"},
 		AutoDetectImports: true,
+		SmartFilter:       true,
 		Context:           context.Background(),
 	}
 
@@ -165,6 +172,15 @@ func WithAutoDetectImports(enabled bool) Option {
 	}
 }
 
+// WithSmartFilter enables or disables smart file filtering.
+// When enabled (default), the compiler will automatically filter out files
+// that are only imported by other files, preventing duplicate compilation.
+func WithSmartFilter(enabled bool) Option {
+	return func(o *Options) {
+		o.SmartFilter = enabled
+	}
+}
+
 // CompileWith is a functional-style API for compiling .proto files.
 // Example:
 //
@@ -174,6 +190,7 @@ func WithAutoDetectImports(enabled bool) Option {
 //		protoc.WithPlugins("go", "go-grpc"),
 //		protoc.WithVerbose(true),
 //		protoc.WithAutoDetectImports(true),
+//		protoc.WithSmartFilter(true),
 //	)
 func CompileWith(opts ...Option) (string, error) {
 	options := NewOptions(opts...)

@@ -71,6 +71,9 @@ type Compiler struct {
 
 	// additionalProtoPaths stores automatically detected include paths.
 	additionalProtoPaths []string
+
+	// smartFilter enables automatic filtering of imported-only files.
+	smartFilter bool
 }
 
 // NewCompiler creates a new Compiler with default options.
@@ -83,6 +86,7 @@ func NewCompiler() *Compiler {
 		goGrpcOpts:        []string{"paths=source_relative"},
 		ctx:               context.Background(),
 		autoDetectImports: true,
+		smartFilter:       true,
 	}
 }
 
@@ -160,6 +164,16 @@ func (c *Compiler) WithAutoDetectImports(enabled bool) *Compiler {
 	return c
 }
 
+// WithSmartFilter enables or disables smart file filtering.
+// When enabled (default), the compiler will automatically filter out files
+// that are only imported by other files, preventing duplicate compilation.
+func (c *Compiler) WithSmartFilter(enabled bool) *Compiler {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.smartFilter = enabled
+	return c
+}
+
 // FindFiles recursively finds all .proto files in the configured directory.
 // This method can be called before Compile to inspect which files will be compiled.
 func (c *Compiler) FindFiles() ([]string, error) {
@@ -201,6 +215,15 @@ func (c *Compiler) FindFiles() ([]string, error) {
 		}
 	}
 
+	c.foundFiles = files
+
+	// If auto-detect is enabled, analyze imports
+	if c.autoDetectImports && len(files) > 0 {
+		if err := c.analyzeImports(files); err != nil {
+			return files, fmt.Errorf("analyze imports: %w", err)
+		}
+	}
+
 	return files, nil
 }
 
@@ -227,6 +250,19 @@ func (c *Compiler) Compile() (string, error) {
 	if len(c.foundFiles) == 0 {
 		c.mu.Unlock()
 		return "", ErrNoProtoFiles
+	}
+
+	// Apply smart filtering if enabled
+	if c.smartFilter && len(c.foundFiles) > 1 {
+		filteredFiles, err := c.filterImportedOnlyFiles()
+		if err != nil {
+			c.mu.Unlock()
+			return "", fmt.Errorf("smart filter: %w", err)
+		}
+
+		if len(filteredFiles) > 0 {
+			c.foundFiles = filteredFiles
+		}
 	}
 
 	// Create output directory
@@ -329,6 +365,124 @@ func (c *Compiler) buildCommand() *exec.Cmd {
 	return exec.CommandContext(c.ctx, "protoc", args...)
 }
 
+// filterImportedOnlyFiles filters out files that are only imported by other files.
+// This prevents duplicate compilation errors when a file is both imported
+// and directly compiled.
+func (c *Compiler) filterImportedOnlyFiles() ([]string, error) {
+	if len(c.foundFiles) <= 1 {
+		// No filtering needed for single file or empty
+		return c.foundFiles, nil
+	}
+
+	// Parse imports from all files
+	importMap := make(map[string][]string)  // file -> []imports
+	fileImportCount := make(map[string]int) // file -> how many times it's imported
+
+	for _, file := range c.foundFiles {
+		imports, err := parseImportsFromFile(file)
+		if err != nil {
+			// Skip files that can't be parsed
+			continue
+		}
+		importMap[file] = imports
+
+		// Count how many times each imported file is referenced
+		for _, imp := range imports {
+			// Convert import path to absolute path
+			absImportPath, err := resolveImportPath(imp, file, c.protoDir)
+			if err != nil {
+				continue
+			}
+			fileImportCount[absImportPath]++
+		}
+	}
+
+	// Identify files that should be kept (not filtered out)
+	var filtered []string
+	for _, file := range c.foundFiles {
+		// Check if this file is imported by other files
+		importCount := fileImportCount[file]
+
+		// Always keep files that:
+		// 1. Are not imported by any other file (importCount == 0)
+		// 2. Have service definitions (likely main files)
+		// 3. Have message definitions but are not imported
+
+		hasService, _ := fileHasServiceDefinition(file)
+		hasMessages, _ := fileHasMessageDefinitions(file)
+
+		if importCount == 0 || hasService || (hasMessages && importCount == 0) {
+			// This is likely a "main" file that should be compiled directly
+			filtered = append(filtered, file)
+		} else {
+			// This file is only imported by others and doesn't have services
+			// It will be compiled automatically through imports
+			if c.verbose {
+				fmt.Printf("Smart filter: Excluding %s (imported by %d other files)\n",
+					filepath.Base(file), importCount)
+			}
+		}
+	}
+
+	// If filtering would remove all files, keep the original list
+	if len(filtered) == 0 {
+		return c.foundFiles, nil
+	}
+
+	return filtered, nil
+}
+
+// resolveImportPath resolves an import path to an absolute file path.
+func resolveImportPath(importPath, sourceFile, protoDir string) (string, error) {
+	// Try relative to source file directory first
+	sourceDir := filepath.Dir(sourceFile)
+	possiblePath := filepath.Join(sourceDir, importPath)
+
+	if _, err := os.Stat(possiblePath); err == nil {
+		absPath, err := filepath.Abs(possiblePath)
+		if err != nil {
+			return "", err
+		}
+		return absPath, nil
+	}
+
+	// Try relative to proto directory
+	possiblePath = filepath.Join(protoDir, importPath)
+	if _, err := os.Stat(possiblePath); err == nil {
+		absPath, err := filepath.Abs(possiblePath)
+		if err != nil {
+			return "", err
+		}
+		return absPath, nil
+	}
+
+	return "", fmt.Errorf("cannot resolve import path: %s", importPath)
+}
+
+// fileHasServiceDefinition checks if a proto file contains service definitions.
+func fileHasServiceDefinition(filePath string) (bool, error) {
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return false, err
+	}
+
+	// Simple regex to check for service definitions
+	serviceRegex := regexp.MustCompile(`service\s+\w+\s*{`)
+	return serviceRegex.Match(content), nil
+}
+
+// fileHasMessageDefinitions checks if a proto file contains message definitions.
+func fileHasMessageDefinitions(filePath string) (bool, error) {
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return false, err
+	}
+
+	// Simple regex to check for message definitions
+	messageRegex := regexp.MustCompile(`message\s+\w+\s*{`)
+	return messageRegex.Match(content), nil
+}
+
 // buildPluginOpts builds the plugin options string.
 func buildPluginOpts(prefix string, options []string, outputDir string) string {
 	var opts []string
@@ -351,6 +505,9 @@ func buildPluginOpts(prefix string, options []string, outputDir string) string {
 // automatically add necessary include paths.
 func (c *Compiler) analyzeImports(files []string) error {
 	processedPaths := make(map[string]bool)
+
+	// Clear any previously detected paths
+	c.additionalProtoPaths = []string{}
 
 	// Add protoDir to processed paths
 	absProtoDir, err := filepath.Abs(c.protoDir)

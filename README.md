@@ -10,6 +10,7 @@ This package solves the problem of compiling multiple `.proto` files in Windows 
 
 - ✅ **Recursive file discovery**: Automatically finds all `.proto` files in directory trees
 - ✅ **Auto import detection**: Automatically detects import dependencies and adds necessary include paths
+- ✅ **Smart file filtering**: Automatically filters out imported-only files to prevent duplicate compilation errors
 - ✅ **Multiple API styles**: Simple functions, functional options, and builder pattern
 - ✅ **Plugin support**: Built-in support for `go` and `go-grpc` plugins
 - ✅ **Custom options**: Flexible configuration for all protoc plugins
@@ -124,6 +125,11 @@ func WithVerbose(verbose bool) Option
 // dependencies and add necessary include paths.
 func WithAutoDetectImports(enabled bool) Option
 
+// WithSmartFilter enables or disables smart file filtering
+// When enabled (default), the compiler will automatically filter out files
+// that are only imported by other files, preventing duplicate compilation.
+func WithSmartFilter(enabled bool) Option
+
 // WithContext sets the context for cancellation and timeout
 func WithContext(ctx context.Context) Option
 ```
@@ -162,6 +168,11 @@ func (c *Compiler) WithVerbose(verbose bool) *Compiler
 // When enabled (default), the compiler will automatically detect import
 // dependencies and add necessary include paths.
 func (c *Compiler) WithAutoDetectImports(enabled bool) *Compiler
+
+// WithSmartFilter enables or disables smart file filtering
+// When enabled (default), the compiler will automatically filter out files
+// that are only imported by other files, preventing duplicate compilation.
+func (c *Compiler) WithSmartFilter(enabled bool) *Compiler
 
 // WithContext sets the context for cancellation and timeout
 func (c *Compiler) WithContext(ctx context.Context) *Compiler
@@ -240,6 +251,26 @@ output, err := protoc.CompileWith(
 )
 ```
 
+### With Smart File Filtering
+
+```go
+// Compile with smart filtering (prevents duplicate definition errors)
+output, err := protoc.CompileWith(
+    protoc.WithProtoDir("./proto"),
+    protoc.WithOutputDir("./generated"),
+    protoc.WithSmartFilter(true), // Automatically filter imported-only files
+    protoc.WithVerbose(true),
+)
+
+// Disable smart filtering for manual control
+output, err := protoc.CompileWith(
+    protoc.WithProtoDir("./proto"),
+    protoc.WithOutputDir("./generated"),
+    protoc.WithSmartFilter(false), // Compile all files directly
+    protoc.WithVerbose(true),
+)
+```
+
 ### Using Builder Pattern
 
 ```go
@@ -251,6 +282,7 @@ compiler := protoc.NewCompiler().
     WithGoGrpcOpts("paths=source_relative").
     WithProtoPaths("./vendor/google/api").
     WithAutoDetectImports(true). // Enable auto import detection
+    WithSmartFilter(true).      // Enable smart file filtering
     WithVerbose(true)
 
 // Find files first
@@ -292,6 +324,12 @@ protoc-go-compiler -plugins=go,go-grpc
 
 # With verbose output
 protoc-go-compiler -verbose
+
+# With smart filtering (prevents duplicate definition errors)
+protoc-go-compiler -smart-filter=true
+
+# Disable smart filtering
+protoc-go-compiler -smart-filter=false
 ```
 
 ### Integration Examples
@@ -323,6 +361,7 @@ output, err := protoc.CompileWith(
     protoc.WithProtoDir("./act/act7001"),
     protoc.WithOutputDir("./generated"),
     protoc.WithAutoDetectImports(true), // Automatically finds ../act directory
+    protoc.WithSmartFilter(true),      // Prevents duplicate definition errors
 )
 if err != nil {
     log.Fatalf("Failed to compile act7001: %v", err)
@@ -341,7 +380,7 @@ proto:
 .PHONY: proto-subdir
 proto-subdir:
     @echo "Compiling subdirectory with auto import detection..."
-    @protoc-go-compiler -proto-dir=./act/act7001 -output-dir=./generated -auto-detect-imports=true
+    @protoc-go-compiler -proto-dir=./act/act7001 -output-dir=./generated -auto-detect-imports=true -smart-filter=true
 ```
 
 #### Using go:generate
@@ -350,7 +389,7 @@ proto-subdir:
 //go:generate go run github.com/dongrv/protoc-go/cmd/protoc-go-compiler -proto-dir=./proto -output-dir=./generated
 
 // For subdirectories with imports
-//go:generate go run github.com/dongrv/protoc-go/cmd/protoc-go-compiler -proto-dir=./act/act7001 -output-dir=./generated -auto-detect-imports=true
+//go:generate go run github.com/dongrv/protoc-go/cmd/protoc-go-compiler -proto-dir=./act/act7001 -output-dir=./generated -auto-detect-imports=true -smart-filter=true
 ```
 
 ## Error Handling
@@ -418,16 +457,26 @@ On Windows, the `protoc` command doesn't support wildcard patterns like `*.proto
 A common problem when compiling Protocol Buffer files is handling imports between directories. For example:
 - Directory `act7001/` contains `act7001.proto` that imports `../act/common.proto`
 - When compiling only `act7001/` directory, protoc cannot find the imported file
+- Files like `enum.proto` that are imported by other files may be compiled twice, causing duplicate definition errors
 
-This package solves this with **auto import detection**:
+This package solves these problems with:
+
+### Auto Import Detection
 - Automatically parses `.proto` files to find import statements
 - Searches for imported files in parent and sibling directories
 - Adds necessary include paths to the protoc command
 - Works with nested directory structures
 
+### Smart File Filtering
+- Automatically detects files that are only imported by other files
+- Filters out imported-only files from direct compilation
+- Prevents duplicate definition errors
+- Reduces compilation time by avoiding redundant work
+- Preserves files with service definitions and standalone files
+
 The package is designed to be:
 - **Simple**: Easy to use with minimal configuration
 - **Flexible**: Multiple API styles to suit different use cases
-- **Smart**: Automatic import detection for complex dependency graphs
+- **Smart**: Automatic import detection and smart filtering for complex dependency graphs
 - **Robust**: Comprehensive error handling and validation
 - **Standard**: Follows Go conventions and best practices
