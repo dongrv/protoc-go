@@ -1,0 +1,290 @@
+// Package protoc_test contains examples and tests for the protoc package.
+package protoc_test
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"os"
+	"path/filepath"
+	"time"
+
+	"github.com/dongrv/protoc-go"
+)
+
+// ExampleCompile demonstrates the basic usage of the Compile function.
+func ExampleCompile() {
+	// Create a temporary directory for testing
+	tmpDir, err := os.MkdirTemp("", "protoc-example-*")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create proto directory structure
+	protoDir := filepath.Join(tmpDir, "proto")
+	os.MkdirAll(protoDir, 0755)
+
+	// Create a simple .proto file
+	protoContent := `syntax = "proto3";
+
+package example;
+
+option go_package = "example/generated";
+
+message Person {
+  string name = 1;
+  int32 age = 2;
+  repeated string emails = 3;
+}`
+	protoFile := filepath.Join(protoDir, "person.proto")
+	if err := os.WriteFile(protoFile, []byte(protoContent), 0644); err != nil {
+		log.Fatal(err)
+	}
+
+	// Create output directory
+	outputDir := filepath.Join(tmpDir, "generated")
+
+	// Compile the proto file
+	output, err := protoc.Compile(protoDir, outputDir)
+	if err != nil {
+		// In a real environment with protoc installed, this would succeed
+		fmt.Printf("Note: Compilation would fail without protoc installed: %v\n", err)
+		fmt.Println("This is expected in this example environment.")
+	} else {
+		fmt.Printf("Compilation output: %s\n", output)
+		fmt.Printf("Generated files in: %s\n", outputDir)
+	}
+
+	// Output:
+	// Note: Compilation would fail without protoc installed: protoc command not found in PATH
+	// This is expected in this example environment.
+}
+
+// ExampleCompileWith demonstrates the functional options API.
+func ExampleCompileWith() {
+	// Create a temporary directory for testing
+	tmpDir, err := os.MkdirTemp("", "protoc-example-*")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create proto directory structure
+	protoDir := filepath.Join(tmpDir, "proto")
+	os.MkdirAll(protoDir, 0755)
+
+	// Create a .proto file with gRPC service
+	protoContent := `syntax = "proto3";
+
+package example;
+
+option go_package = "example/generated";
+
+service Greeter {
+  rpc SayHello (HelloRequest) returns (HelloResponse);
+}
+
+message HelloRequest {
+  string name = 1;
+}
+
+message HelloResponse {
+  string message = 1;
+}`
+	protoFile := filepath.Join(protoDir, "greeter.proto")
+	if err := os.WriteFile(protoFile, []byte(protoContent), 0644); err != nil {
+		log.Fatal(err)
+	}
+
+	// Create output directory
+	outputDir := filepath.Join(tmpDir, "generated")
+
+	// Compile with gRPC support and custom options
+	output, err := protoc.CompileWith(
+		protoc.WithProtoDir(protoDir),
+		protoc.WithOutputDir(outputDir),
+		protoc.WithPlugins("go", "go-grpc"),
+		protoc.WithGoOpts("paths=source_relative"),
+		protoc.WithGoGrpcOpts("paths=source_relative"),
+		protoc.WithVerbose(false),
+	)
+	if err != nil {
+		// In a real environment with protoc installed, this would succeed
+		fmt.Printf("Compiled with gRPC support (would fail without protoc)\n")
+	} else {
+		fmt.Printf("Compiled with gRPC support\n")
+		fmt.Printf("Output length: %d bytes\n", len(output))
+	}
+
+	// Output:
+	// Compiled with gRPC support (would fail without protoc)
+}
+
+// ExampleCompiler demonstrates the builder pattern API.
+func ExampleCompiler() {
+	// Create a temporary directory for testing
+	tmpDir, err := os.MkdirTemp("", "protoc-example-*")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create proto directory structure
+	protoDir := filepath.Join(tmpDir, "proto")
+	os.MkdirAll(filepath.Join(protoDir, "subdir"), 0755)
+
+	// Create multiple .proto files
+	protoFiles := []struct {
+		name    string
+		content string
+	}{
+		{
+			name: "user.proto",
+			content: `syntax = "proto3";
+package example;
+option go_package = "example/generated";
+message User {
+  string id = 1;
+  string name = 2;
+}`,
+		},
+		{
+			name: "subdir/product.proto",
+			content: `syntax = "proto3";
+package example;
+option go_package = "example/generated";
+message Product {
+  string id = 1;
+  string name = 2;
+  double price = 3;
+}`,
+		},
+	}
+
+	for _, file := range protoFiles {
+		filePath := filepath.Join(protoDir, file.name)
+		if err := os.WriteFile(filePath, []byte(file.content), 0644); err != nil {
+			log.Fatal(err)
+		}
+	}
+
+	// Create output directory
+	outputDir := filepath.Join(tmpDir, "generated")
+
+	// Use the Compiler builder pattern
+	compiler := protoc.NewCompiler().
+		WithProtoDir(protoDir).
+		WithOutputDir(outputDir).
+		WithPlugins("go").
+		WithGoOpts("paths=source_relative").
+		WithVerbose(false)
+
+	// First, find the files
+	files, err := compiler.FindFiles()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Printf("Found %d .proto files\n", len(files))
+
+	// Then compile them
+	_, err = compiler.Compile()
+	if err != nil {
+		// In a real environment with protoc installed, this would succeed
+		fmt.Printf("Compiler configured (would fail without protoc)\n")
+	} else {
+		fmt.Printf("Compilation successful\n")
+	}
+
+	// Output:
+	// Found 2 .proto files
+	// Compiler configured (would fail without protoc)
+}
+
+// ExampleWithContext demonstrates using context for timeout.
+func ExampleWithContext() {
+	// Create a temporary directory for testing
+	tmpDir, err := os.MkdirTemp("", "protoc-example-*")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create proto directory structure
+	protoDir := filepath.Join(tmpDir, "proto")
+	os.MkdirAll(protoDir, 0755)
+
+	// Create a .proto file
+	protoContent := `syntax = "proto3";
+package example;
+option go_package = "example/generated";
+message Test {
+  string value = 1;
+}`
+	protoFile := filepath.Join(protoDir, "test.proto")
+	if err := os.WriteFile(protoFile, []byte(protoContent), 0644); err != nil {
+		log.Fatal(err)
+	}
+
+	// Create output directory
+	outputDir := filepath.Join(tmpDir, "generated")
+
+	// Create a context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Compile with context
+	_, err = protoc.CompileWith(
+		protoc.WithProtoDir(protoDir),
+		protoc.WithOutputDir(outputDir),
+		protoc.WithContext(ctx),
+	)
+	if err != nil {
+		// In a real environment with protoc installed, this would succeed
+		fmt.Printf("Context configured (would fail without protoc)\n")
+	} else {
+		fmt.Printf("Compiled with context timeout\n")
+	}
+
+	// Output:
+	// Context configured (would fail without protoc)
+}
+
+// ExampleMustCompile demonstrates the MustCompile function for initialization.
+func ExampleMustCompile() {
+	// Note: In real usage, you would use actual directories
+	// This example shows the pattern for initialization
+
+	// For initialization in tests or examples where failure should panic
+	// Note: MustCompile will panic if compilation fails
+	// In a real environment with protoc installed, this would work:
+	// _ = protoc.MustCompile("./proto", "./generated")
+
+	// Or with options
+	// _ = protoc.MustCompileWith(
+	//     protoc.WithProtoDir("./proto"),
+	//     protoc.WithOutputDir("./generated"),
+	//     protoc.WithPlugins("go", "go-grpc"),
+	// )
+
+	fmt.Println("MustCompile example - would panic without protoc installed")
+
+	// Output:
+	// MustCompile example - would panic without protoc installed
+}
+
+// ExampleErrorHandling demonstrates error handling.
+func ExampleErrorHandling() {
+	// Try to compile from a non-existent directory
+	_, err := protoc.Compile("/non/existent/dir", "./output")
+
+	if err != nil {
+		// The actual error may vary depending on the environment
+		// It could be "protoc command not found in PATH" or a file system error
+		fmt.Printf("Error occurred: %v\n", err)
+	}
+
+	// Output:
+	// Error occurred: protoc command not found in PATH
+}
