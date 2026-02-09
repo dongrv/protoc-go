@@ -29,7 +29,8 @@ func CompileWithOptions(opts Options) (string, error) {
 		WithPlugins(opts.Plugins...).
 		WithGoOpts(opts.GoOpts...).
 		WithGoGrpcOpts(opts.GoGrpcOpts...).
-		WithVerbose(opts.Verbose)
+		WithVerbose(opts.Verbose).
+		WithAutoDetectImports(opts.AutoDetectImports)
 
 	if opts.Context != nil {
 		compiler = compiler.WithContext(opts.Context)
@@ -67,6 +68,11 @@ type Options struct {
 	// Verbose enables verbose output to stdout.
 	Verbose bool
 
+	// AutoDetectImports enables automatic detection of import dependencies.
+	// When enabled (default), the compiler will automatically detect import
+	// dependencies and add necessary include paths.
+	AutoDetectImports bool
+
 	// Context for cancellation and timeout.
 	// If nil, context.Background() is used.
 	Context context.Context
@@ -78,12 +84,13 @@ type Option func(*Options)
 // NewOptions creates a new Options with default values.
 func NewOptions(opts ...Option) Options {
 	options := Options{
-		ProtoDir:   ".",
-		OutputDir:  ".",
-		Plugins:    []string{"go"},
-		GoOpts:     []string{"paths=source_relative"},
-		GoGrpcOpts: []string{"paths=source_relative"},
-		Context:    context.Background(),
+		ProtoDir:          ".",
+		OutputDir:         ".",
+		Plugins:           []string{"go"},
+		GoOpts:            []string{"paths=source_relative"},
+		GoGrpcOpts:        []string{"paths=source_relative"},
+		AutoDetectImports: true,
+		Context:           context.Background(),
 	}
 
 	for _, opt := range opts {
@@ -149,6 +156,15 @@ func WithContext(ctx context.Context) Option {
 	}
 }
 
+// WithAutoDetectImports enables or disables automatic import detection.
+// When enabled (default), the compiler will automatically detect import
+// dependencies and add necessary include paths.
+func WithAutoDetectImports(enabled bool) Option {
+	return func(o *Options) {
+		o.AutoDetectImports = enabled
+	}
+}
+
 // CompileWith is a functional-style API for compiling .proto files.
 // Example:
 //
@@ -157,6 +173,7 @@ func WithContext(ctx context.Context) Option {
 //		protoc.WithOutputDir("./generated"),
 //		protoc.WithPlugins("go", "go-grpc"),
 //		protoc.WithVerbose(true),
+//		protoc.WithAutoDetectImports(true),
 //	)
 func CompileWith(opts ...Option) (string, error) {
 	options := NewOptions(opts...)

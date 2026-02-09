@@ -9,6 +9,7 @@ This package solves the problem of compiling multiple `.proto` files in Windows 
 ### Features
 
 - ✅ **Recursive file discovery**: Automatically finds all `.proto` files in directory trees
+- ✅ **Auto import detection**: Automatically detects import dependencies and adds necessary include paths
 - ✅ **Multiple API styles**: Simple functions, functional options, and builder pattern
 - ✅ **Plugin support**: Built-in support for `go` and `go-grpc` plugins
 - ✅ **Custom options**: Flexible configuration for all protoc plugins
@@ -118,6 +119,11 @@ func WithGoGrpcOpts(opts ...string) Option
 // WithVerbose enables verbose output
 func WithVerbose(verbose bool) Option
 
+// WithAutoDetectImports enables or disables automatic import detection
+// When enabled (default), the compiler will automatically detect import
+// dependencies and add necessary include paths.
+func WithAutoDetectImports(enabled bool) Option
+
 // WithContext sets the context for cancellation and timeout
 func WithContext(ctx context.Context) Option
 ```
@@ -151,6 +157,11 @@ func (c *Compiler) WithGoGrpcOpts(opts ...string) *Compiler
 
 // WithVerbose enables verbose output
 func (c *Compiler) WithVerbose(verbose bool) *Compiler
+
+// WithAutoDetectImports enables or disables automatic import detection
+// When enabled (default), the compiler will automatically detect import
+// dependencies and add necessary include paths.
+func (c *Compiler) WithAutoDetectImports(enabled bool) *Compiler
 
 // WithContext sets the context for cancellation and timeout
 func (c *Compiler) WithContext(ctx context.Context) *Compiler
@@ -210,6 +221,25 @@ output, err := protoc.CompileWith(
 )
 ```
 
+### With Auto Import Detection
+
+```go
+// Compile a subdirectory that imports files from parent directories
+output, err := protoc.CompileWith(
+    protoc.WithProtoDir("./subdir"),
+    protoc.WithOutputDir("./generated"),
+    protoc.WithAutoDetectImports(true), // Automatically find parent directories
+)
+
+// Disable auto import detection for manual control
+output, err := protoc.CompileWith(
+    protoc.WithProtoDir("./subdir"),
+    protoc.WithOutputDir("./generated"),
+    protoc.WithAutoDetectImports(false),
+    protoc.WithProtoPaths(".."), // Manually add parent directory
+)
+```
+
 ### Using Builder Pattern
 
 ```go
@@ -220,6 +250,7 @@ compiler := protoc.NewCompiler().
     WithGoOpts("paths=source_relative").
     WithGoGrpcOpts("paths=source_relative").
     WithProtoPaths("./vendor/google/api").
+    WithAutoDetectImports(true). // Enable auto import detection
     WithVerbose(true)
 
 // Find files first
@@ -263,9 +294,9 @@ protoc-go-compiler -plugins=go,go-grpc
 protoc-go-compiler -verbose
 ```
 
-## Integration Examples
+### Integration Examples
 
-### In a Build Script
+#### In a Build Script
 
 ```go
 // build.go
@@ -284,7 +315,21 @@ func main() {
 }
 ```
 
-### In a Makefile
+#### Compiling Subdirectories with Dependencies
+
+```go
+// Compile a specific subdirectory that imports from parent directories
+output, err := protoc.CompileWith(
+    protoc.WithProtoDir("./act/act7001"),
+    protoc.WithOutputDir("./generated"),
+    protoc.WithAutoDetectImports(true), // Automatically finds ../act directory
+)
+if err != nil {
+    log.Fatalf("Failed to compile act7001: %v", err)
+}
+```
+
+#### In a Makefile
 
 ```makefile
 .PHONY: proto
@@ -292,12 +337,20 @@ proto:
     @echo "Compiling proto files..."
     @go run ./tools/build.go
     @echo "Proto compilation complete"
+
+.PHONY: proto-subdir
+proto-subdir:
+    @echo "Compiling subdirectory with auto import detection..."
+    @protoc-go-compiler -proto-dir=./act/act7001 -output-dir=./generated -auto-detect-imports=true
 ```
 
-### Using go:generate
+#### Using go:generate
 
 ```go
 //go:generate go run github.com/dongrv/protoc-go/cmd/protoc-go-compiler -proto-dir=./proto -output-dir=./generated
+
+// For subdirectories with imports
+//go:generate go run github.com/dongrv/protoc-go/cmd/protoc-go-compiler -proto-dir=./act/act7001 -output-dir=./generated -auto-detect-imports=true
 ```
 
 ## Error Handling
@@ -358,9 +411,23 @@ On Windows, the `protoc` command doesn't support wildcard patterns like `*.proto
 1. Recursively finding all `.proto` files
 2. Building a `protoc` command with all files explicitly listed
 3. Providing a clean Go API for integration into build systems
+4. **Auto import detection**: Automatically finding and adding necessary include paths for imports
+
+### Solving Import Dependencies
+
+A common problem when compiling Protocol Buffer files is handling imports between directories. For example:
+- Directory `act7001/` contains `act7001.proto` that imports `../act/common.proto`
+- When compiling only `act7001/` directory, protoc cannot find the imported file
+
+This package solves this with **auto import detection**:
+- Automatically parses `.proto` files to find import statements
+- Searches for imported files in parent and sibling directories
+- Adds necessary include paths to the protoc command
+- Works with nested directory structures
 
 The package is designed to be:
 - **Simple**: Easy to use with minimal configuration
 - **Flexible**: Multiple API styles to suit different use cases
+- **Smart**: Automatic import detection for complex dependency graphs
 - **Robust**: Comprehensive error handling and validation
 - **Standard**: Follows Go conventions and best practices

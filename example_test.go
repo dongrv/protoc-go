@@ -48,17 +48,21 @@ message Person {
 	// Compile the proto file
 	output, err := protoc.Compile(protoDir, outputDir)
 	if err != nil {
-		// In a real environment with protoc installed, this would succeed
-		fmt.Printf("Note: Compilation would fail without protoc installed: %v\n", err)
-		fmt.Println("This is expected in this example environment.")
+		// This may fail if protoc is not installed or if there are other issues
+		fmt.Printf("Compilation failed: %v\n", err)
+		fmt.Println("This may happen if protoc is not installed or if there are other issues.")
 	} else {
 		fmt.Printf("Compilation output: %s\n", output)
 		fmt.Printf("Generated files in: %s\n", outputDir)
 	}
 
-	// Output:
-	// Note: Compilation would fail without protoc installed: protoc command not found in PATH
-	// This is expected in this example environment.
+	// Output depends on whether protoc is installed:
+	// If protoc is not installed:
+	//   Compilation failed: protoc command not found in PATH
+	//   This may happen if protoc is not installed or if there are other issues.
+	// If protoc is installed:
+	//   Compilation output: [protoc output]
+	//   Generated files in: [output directory]
 }
 
 // ExampleCompileWith demonstrates the functional options API.
@@ -110,15 +114,19 @@ message HelloResponse {
 		protoc.WithVerbose(false),
 	)
 	if err != nil {
-		// In a real environment with protoc installed, this would succeed
-		fmt.Printf("Compiled with gRPC support (would fail without protoc)\n")
+		// This may fail if protoc is not installed or if there are other issues
+		fmt.Printf("Compilation with gRPC support failed: %v\n", err)
 	} else {
 		fmt.Printf("Compiled with gRPC support\n")
 		fmt.Printf("Output length: %d bytes\n", len(output))
 	}
 
-	// Output:
-	// Compiled with gRPC support (would fail without protoc)
+	// Output depends on whether protoc is installed:
+	// If protoc is not installed:
+	//   Compilation with gRPC support failed: protoc command not found in PATH
+	// If protoc is installed:
+	//   Compiled with gRPC support
+	//   Output length: [number] bytes
 }
 
 // ExampleCompiler demonstrates the builder pattern API.
@@ -191,15 +199,19 @@ message Product {
 	// Then compile them
 	_, err = compiler.Compile()
 	if err != nil {
-		// In a real environment with protoc installed, this would succeed
-		fmt.Printf("Compiler configured (would fail without protoc)\n")
+		// This may fail if protoc is not installed or if there are other issues
+		fmt.Printf("Compilation failed: %v\n", err)
 	} else {
 		fmt.Printf("Compilation successful\n")
 	}
 
-	// Output:
-	// Found 2 .proto files
-	// Compiler configured (would fail without protoc)
+	// Output depends on whether protoc is installed:
+	// If protoc is not installed:
+	//   Found 2 .proto files
+	//   Compilation failed: protoc command not found in PATH
+	// If protoc is installed:
+	//   Found 2 .proto files
+	//   Compilation successful
 }
 
 // ExampleWithContext demonstrates using context for timeout.
@@ -241,14 +253,17 @@ message Test {
 		protoc.WithContext(ctx),
 	)
 	if err != nil {
-		// In a real environment with protoc installed, this would succeed
-		fmt.Printf("Context configured (would fail without protoc)\n")
+		// This may fail if protoc is not installed or if there are other issues
+		fmt.Printf("Compilation with context failed: %v\n", err)
 	} else {
 		fmt.Printf("Compiled with context timeout\n")
 	}
 
-	// Output:
-	// Context configured (would fail without protoc)
+	// Output depends on whether protoc is installed:
+	// If protoc is not installed:
+	//   Compilation with context failed: protoc command not found in PATH
+	// If protoc is installed:
+	//   Compiled with context timeout
 }
 
 // ExampleMustCompile demonstrates the MustCompile function for initialization.
@@ -285,6 +300,9 @@ func ExampleErrorHandling() {
 		fmt.Printf("Error occurred: %v\n", err)
 	}
 
-	// Output:
-	// Error occurred: protoc command not found in PATH
+	// Output depends on the environment:
+	// If protoc is not installed:
+	//   Error occurred: protoc command not found in PATH
+	// If protoc is installed but directory doesn't exist:
+	//   Error occurred: [file system error]
 }

@@ -7,12 +7,14 @@
 package protoc
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 )
@@ -63,17 +65,24 @@ type Compiler struct {
 
 	// mu protects concurrent access to the compiler.
 	mu sync.RWMutex
+
+	// autoDetectImports enables automatic detection of import dependencies.
+	autoDetectImports bool
+
+	// additionalProtoPaths stores automatically detected include paths.
+	additionalProtoPaths []string
 }
 
 // NewCompiler creates a new Compiler with default options.
 func NewCompiler() *Compiler {
 	return &Compiler{
-		protoDir:   ".",
-		outputDir:  ".",
-		plugins:    []string{"go"},
-		goOpts:     []string{"paths=source_relative"},
-		goGrpcOpts: []string{"paths=source_relative"},
-		ctx:        context.Background(),
+		protoDir:          ".",
+		outputDir:         ".",
+		plugins:           []string{"go"},
+		goOpts:            []string{"paths=source_relative"},
+		goGrpcOpts:        []string{"paths=source_relative"},
+		ctx:               context.Background(),
+		autoDetectImports: true,
 	}
 }
 
@@ -141,6 +150,16 @@ func (c *Compiler) WithContext(ctx context.Context) *Compiler {
 	return c
 }
 
+// WithAutoDetectImports enables or disables automatic import detection.
+// When enabled (default), the compiler will automatically detect import
+// dependencies and add necessary include paths.
+func (c *Compiler) WithAutoDetectImports(enabled bool) *Compiler {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.autoDetectImports = enabled
+	return c
+}
+
 // FindFiles recursively finds all .proto files in the configured directory.
 // This method can be called before Compile to inspect which files will be compiled.
 func (c *Compiler) FindFiles() ([]string, error) {
@@ -174,6 +193,14 @@ func (c *Compiler) FindFiles() ([]string, error) {
 	}
 
 	c.foundFiles = files
+
+	// If auto-detect is enabled, analyze imports
+	if c.autoDetectImports && len(files) > 0 {
+		if err := c.analyzeImports(files); err != nil {
+			return files, fmt.Errorf("analyze imports: %w", err)
+		}
+	}
+
 	return files, nil
 }
 
@@ -273,7 +300,14 @@ func (c *Compiler) buildCommand() *exec.Cmd {
 
 	// Add include paths
 	args = append(args, "-I", c.protoDir)
+
+	// Add user-specified proto paths
 	for _, path := range c.protoPaths {
+		args = append(args, "-I", path)
+	}
+
+	// Add automatically detected proto paths
+	for _, path := range c.additionalProtoPaths {
 		args = append(args, "-I", path)
 	}
 
@@ -311,4 +345,140 @@ func buildPluginOpts(prefix string, options []string, outputDir string) string {
 	}
 
 	return optStr + outputDir
+}
+
+// analyzeImports analyzes proto files to detect import dependencies and
+// automatically add necessary include paths.
+func (c *Compiler) analyzeImports(files []string) error {
+	processedPaths := make(map[string]bool)
+
+	// Add protoDir to processed paths
+	absProtoDir, err := filepath.Abs(c.protoDir)
+	if err != nil {
+		return fmt.Errorf("resolve proto directory: %w", err)
+	}
+	processedPaths[absProtoDir] = true
+
+	// Add user-specified proto paths
+	for _, path := range c.protoPaths {
+		absPath, err := filepath.Abs(path)
+		if err != nil {
+			continue
+		}
+		processedPaths[absPath] = true
+	}
+
+	// Collect all imports from all files
+	allImports := make(map[string]bool)
+	for _, file := range files {
+		imports, err := parseImportsFromFile(file)
+		if err != nil {
+			// Skip files that can't be parsed
+			continue
+		}
+		for _, imp := range imports {
+			allImports[imp] = true
+		}
+	}
+
+	// For each import, try to find its directory and add it as include path
+	for importPath := range allImports {
+		// Try to find the directory containing the imported file
+		importDir, err := findImportDirectory(importPath, files, absProtoDir)
+		if err != nil {
+			// If we can't find it, skip this import
+			continue
+		}
+
+		// Check if we've already added this path
+		if !processedPaths[importDir] {
+			c.additionalProtoPaths = append(c.additionalProtoPaths, importDir)
+			processedPaths[importDir] = true
+		}
+	}
+
+	return nil
+}
+
+// parseImportsFromFile parses import statements from a proto file.
+func parseImportsFromFile(filePath string) ([]string, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	var imports []string
+	scanner := bufio.NewScanner(file)
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		// Remove comments
+		if idx := strings.Index(line, "//"); idx != -1 {
+			line = line[:idx]
+		}
+
+		// Check for import statement
+		if strings.Contains(line, "import") {
+			// Try to match import pattern
+			matches := regexp.MustCompile(`import\s+(?:"([^"]+)"|'([^']+)')`).FindStringSubmatch(line)
+			if matches != nil {
+				// matches[1] is for double quotes, matches[2] is for single quotes
+				if matches[1] != "" {
+					imports = append(imports, matches[1])
+				} else if matches[2] != "" {
+					imports = append(imports, matches[2])
+				}
+			}
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+
+	return imports, nil
+}
+
+// findImportDirectory tries to find the directory containing an imported file.
+func findImportDirectory(importPath string, protoFiles []string, protoDir string) (string, error) {
+	// First, check if the import path is relative to any of the proto files
+	for _, protoFile := range protoFiles {
+		protoFileDir := filepath.Dir(protoFile)
+		possiblePath := filepath.Join(protoFileDir, importPath)
+
+		// Check if the file exists
+		if _, err := os.Stat(possiblePath); err == nil {
+			return protoFileDir, nil
+		}
+	}
+
+	// Check relative to proto directory
+	possiblePath := filepath.Join(protoDir, importPath)
+	if _, err := os.Stat(possiblePath); err == nil {
+		return protoDir, nil
+	}
+
+	// If not found, try to find parent directories
+	// For example, if import is "act/common.proto" and we're in "act7001",
+	// we should check parent directories
+
+	// Start from protoDir and go up
+	currentDir := protoDir
+	for {
+		possiblePath := filepath.Join(currentDir, importPath)
+		if _, err := os.Stat(possiblePath); err == nil {
+			return currentDir, nil
+		}
+
+		// Go up one directory
+		parentDir := filepath.Dir(currentDir)
+		if parentDir == currentDir {
+			// Reached root
+			break
+		}
+		currentDir = parentDir
+	}
+
+	return "", fmt.Errorf("cannot find directory for import: %s", importPath)
 }

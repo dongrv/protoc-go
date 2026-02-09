@@ -16,15 +16,16 @@ import (
 func main() {
 	// Parse command line flags
 	var (
-		protoDir    string
-		outputDir   string
-		protoPaths  string
-		plugins     string
-		goOpts      string
-		goGrpcOpts  string
-		verbose     bool
-		showHelp    bool
-		showVersion bool
+		protoDir          string
+		outputDir         string
+		protoPaths        string
+		plugins           string
+		goOpts            string
+		goGrpcOpts        string
+		verbose           bool
+		autoDetectImports bool
+		showHelp          bool
+		showVersion       bool
 	)
 
 	flag.StringVar(&protoDir, "proto-dir", ".", "Directory containing .proto files (default: current directory)")
@@ -38,6 +39,8 @@ func main() {
 	flag.StringVar(&goGrpcOpts, "go-grpc-opt", "paths=source_relative", "Options for go-grpc plugin, comma-separated")
 	flag.BoolVar(&verbose, "verbose", false, "Enable verbose output")
 	flag.BoolVar(&verbose, "v", false, "Short form of -verbose")
+	flag.BoolVar(&autoDetectImports, "auto-detect-imports", true, "Enable automatic import detection (default: true)")
+	flag.BoolVar(&autoDetectImports, "a", true, "Short form of -auto-detect-imports")
 	flag.BoolVar(&showHelp, "help", false, "Show help message")
 	flag.BoolVar(&showHelp, "h", false, "Short form of -help")
 	flag.BoolVar(&showVersion, "version", false, "Show version information")
@@ -65,6 +68,7 @@ func main() {
 		protoc.WithProtoDir(protoDir),
 		protoc.WithOutputDir(outputDir),
 		protoc.WithVerbose(verbose),
+		protoc.WithAutoDetectImports(autoDetectImports),
 	}
 
 	// Parse comma-separated lists
@@ -132,6 +136,7 @@ Options:
   -go-opt string             Options for go plugin, comma-separated (default "paths=source_relative")
   -go-grpc-opt string        Options for go-grpc plugin, comma-separated (default "paths=source_relative")
   -v, -verbose               Enable verbose output
+  -a, -auto-detect-imports   Enable automatic import detection (default: true)
   -h, -help                  Show this help message
   -version                   Show version information
 
@@ -152,6 +157,12 @@ Examples:
     -proto-paths=./proto,./vendor \
     -go-opt=paths=source_relative,module=github.com/example/project \
     -verbose
+
+  # Disable auto import detection (use manual proto paths only)
+  protoc-go-compiler -auto-detect-imports=false
+
+  # Compile subdirectory that imports from parent directory
+  protoc-go-compiler -proto-dir=./subdir -auto-detect-imports=true
 
 Environment:
   This tool requires the following to be installed and available in PATH:
