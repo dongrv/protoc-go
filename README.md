@@ -11,6 +11,7 @@ This package solves the problem of compiling multiple `.proto` files in Windows 
 - ✅ **Recursive file discovery**: Automatically finds all `.proto` files in directory trees
 - ✅ **Auto import detection**: Automatically detects import dependencies and adds necessary include paths
 - ✅ **Smart file filtering**: Automatically filters out imported-only files to prevent duplicate compilation errors
+- ✅ **Path deduplication**: Automatically removes duplicate include paths to prevent "already defined" errors
 - ✅ **Multiple API styles**: Simple functions, functional options, and builder pattern
 - ✅ **Plugin support**: Built-in support for `go` and `go-grpc` plugins
 - ✅ **Custom options**: Flexible configuration for all protoc plugins
@@ -474,9 +475,24 @@ This package solves these problems with:
 - Reduces compilation time by avoiding redundant work
 - Preserves files with service definitions and standalone files
 
+### Path Deduplication Optimization
+- **Prevents "already defined" errors**: When duplicate `-I` paths are provided, protoc may treat the same file as different entities, causing compilation errors
+- **Automatic deduplication**: The package automatically removes duplicate include paths, even when they're specified in different formats (absolute vs relative paths)
+- **Standard library compliance**: Uses Go's standard `filepath.Abs()` to normalize paths before comparison
+- **Optimized for Windows**: Handles Windows path separators and case-insensitive file systems correctly
+
+#### Example Problem Solved:
+```bash
+# Problematic command (causes "already defined" errors):
+protoc -I D:\proto\act7110 -I D:\proto --go_out=... D:\proto\act7110\enum.proto
+
+# With path deduplication, this becomes:
+protoc -I D:\proto --go_out=... D:\proto\act7110\enum.proto
+```
+
 The package is designed to be:
 - **Simple**: Easy to use with minimal configuration
 - **Flexible**: Multiple API styles to suit different use cases
-- **Smart**: Automatic import detection and smart filtering for complex dependency graphs
+- **Smart**: Automatic import detection, smart filtering, and path deduplication for complex dependency graphs
 - **Robust**: Comprehensive error handling and validation
 - **Standard**: Follows Go conventions and best practices

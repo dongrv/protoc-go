@@ -215,15 +215,6 @@ func (c *Compiler) FindFiles() ([]string, error) {
 		}
 	}
 
-	c.foundFiles = files
-
-	// If auto-detect is enabled, analyze imports
-	if c.autoDetectImports && len(files) > 0 {
-		if err := c.analyzeImports(files); err != nil {
-			return files, fmt.Errorf("analyze imports: %w", err)
-		}
-	}
-
 	return files, nil
 }
 
@@ -334,17 +325,36 @@ func (c *Compiler) validate() error {
 func (c *Compiler) buildCommand() *exec.Cmd {
 	args := []string{}
 
-	// Add include paths
-	args = append(args, "-I", c.protoDir)
+	// Collect all include paths, ensuring no duplicates
+	// This prevents the issue described in the optimization document where
+	// duplicate -I paths cause protoc to treat the same file as different entities
+	includePaths := make(map[string]bool)
+
+	// Helper function to add path if not already present
+	addIncludePath := func(path string) {
+		absPath, err := filepath.Abs(path)
+		if err != nil {
+			// If we can't get absolute path, use the original
+			absPath = path
+		}
+
+		if !includePaths[absPath] {
+			includePaths[absPath] = true
+			args = append(args, "-I", path)
+		}
+	}
+
+	// Add proto directory as first include path
+	addIncludePath(c.protoDir)
 
 	// Add user-specified proto paths
 	for _, path := range c.protoPaths {
-		args = append(args, "-I", path)
+		addIncludePath(path)
 	}
 
 	// Add automatically detected proto paths
 	for _, path := range c.additionalProtoPaths {
-		args = append(args, "-I", path)
+		addIncludePath(path)
 	}
 
 	// Add plugin outputs
