@@ -3,6 +3,7 @@ package protoc_test
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -307,4 +308,146 @@ message Test { string id = 1; }`
 
 	t.Logf("Forward slash path compatibility test completed")
 	t.Logf("On %s, paths are normalized to use forward slashes for protoc command", runtime.GOOS)
+}
+
+func TestProtocAvailabilityCheck(t *testing.T) {
+	// Test that the compiler checks for protoc availability
+	tmpDir := t.TempDir()
+	protoDir := filepath.Join(tmpDir, "proto", "act7110")
+	workspaceDir := filepath.Join(tmpDir, "proto")
+	outputDir := filepath.Join(tmpDir, "generated")
+
+	// Create directories
+	if err := os.MkdirAll(protoDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a .proto file
+	protoContent := `syntax = "proto3";
+package test;
+option go_package = "test/generated";
+message Test { string id = 1; }`
+
+	protoFile := filepath.Join(protoDir, "test.proto")
+	if err := os.WriteFile(protoFile, []byte(protoContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Check if protoc is actually available
+	_, err := exec.LookPath("protoc")
+	protocAvailable := err == nil
+
+	compiler := protoc.NewCompiler().
+		WithProtoDir(protoDir).
+		WithProtoWorkSpace(workspaceDir).
+		WithOutputDir(outputDir).
+		WithPlugins("go").
+		WithGoOpts("paths=source_relative").
+		WithVerbose(false)
+
+	_, compileErr := compiler.Compile()
+
+	if !protocAvailable {
+		// If protoc is not available, we should get an error about protoc not found
+		if compileErr == nil {
+			t.Error("Expected error when protoc is not available, got nil")
+		} else if !strings.Contains(compileErr.Error(), "protoc not found in PATH") {
+			t.Errorf("Expected error about protoc not found, got: %v", compileErr)
+		}
+
+		// Check that the error message contains helpful hints
+		if !strings.Contains(compileErr.Error(), "PATH environment variable") {
+			t.Error("Error message should mention PATH environment variable")
+		}
+
+		// Check for platform-specific hints
+		switch runtime.GOOS {
+		case "windows":
+			if !strings.Contains(compileErr.Error(), "Windows") {
+				t.Error("Error message should contain Windows-specific installation hints")
+			}
+		case "darwin":
+			if !strings.Contains(compileErr.Error(), "macOS") && !strings.Contains(compileErr.Error(), "Homebrew") {
+				t.Error("Error message should contain macOS-specific installation hints")
+			}
+		case "linux":
+			if !strings.Contains(compileErr.Error(), "Linux") && !strings.Contains(compileErr.Error(), "apt") && !strings.Contains(compileErr.Error(), "yum") {
+				t.Error("Error message should contain Linux-specific installation hints")
+			}
+		}
+	} else {
+		// If protoc is available, compilation should proceed (though it may fail for other reasons)
+		// We just want to ensure the availability check doesn't block valid compilation
+		t.Logf("protoc is available, compilation attempted (may succeed or fail for other reasons)")
+		if compileErr != nil && !strings.Contains(compileErr.Error(), "protoc not found") {
+			// Other errors are OK (e.g., import issues, syntax errors, etc.)
+			t.Logf("Compilation failed for other reasons (expected): %v", compileErr)
+		}
+	}
+}
+
+func TestProtocAvailabilityCheckOrder(t *testing.T) {
+	// Test that protoc availability check happens after validation
+	tmpDir := t.TempDir()
+	protoDir := filepath.Join(tmpDir, "proto", "act7110")
+	workspaceDir := filepath.Join(tmpDir, "proto")
+	outputDir := filepath.Join(tmpDir, "generated")
+
+	// Create directories
+	if err := os.MkdirAll(protoDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Test 1: Missing proto directory - should fail validation before checking protoc
+	compiler1 := protoc.NewCompiler().
+		WithProtoWorkSpace(workspaceDir).
+		WithOutputDir(outputDir)
+	_, err1 := compiler1.Compile()
+	if err1 == nil || !strings.Contains(err1.Error(), "proto directory not specified") {
+		t.Errorf("Expected validation error about missing proto directory, got: %v", err1)
+	}
+
+	// Test 2: Missing workspace directory - should fail validation before checking protoc
+	compiler2 := protoc.NewCompiler().
+		WithProtoDir(protoDir).
+		WithOutputDir(outputDir)
+	_, err2 := compiler2.Compile()
+	if err2 == nil || !strings.Contains(err2.Error(), "workspace directory not specified") {
+		t.Errorf("Expected validation error about missing workspace directory, got: %v", err2)
+	}
+
+	// Test 3: Missing output directory - should fail validation before checking protoc
+	compiler3 := protoc.NewCompiler().
+		WithProtoDir(protoDir).
+		WithProtoWorkSpace(workspaceDir)
+	_, err3 := compiler3.Compile()
+	if err3 == nil || !strings.Contains(err3.Error(), "output directory not specified") {
+		t.Errorf("Expected validation error about missing output directory, got: %v", err3)
+	}
+
+	// Test 4: Non-existent proto directory - should fail validation before checking protoc
+	compiler4 := protoc.NewCompiler().
+		WithProtoDir("/non/existent/proto").
+		WithProtoWorkSpace(workspaceDir).
+		WithOutputDir(outputDir)
+	_, err4 := compiler4.Compile()
+	if err4 == nil || !strings.Contains(err4.Error(), "proto directory does not exist") {
+		t.Errorf("Expected validation error about non-existent proto directory, got: %v", err4)
+	}
+
+	// Test 5: Non-existent workspace directory - should fail validation before checking protoc
+	compiler5 := protoc.NewCompiler().
+		WithProtoDir(protoDir).
+		WithProtoWorkSpace("/non/existent/workspace").
+		WithOutputDir(outputDir)
+	_, err5 := compiler5.Compile()
+	if err5 == nil || !strings.Contains(err5.Error(), "workspace directory does not exist") {
+		t.Errorf("Expected validation error about non-existent workspace directory, got: %v", err5)
+	}
 }

@@ -30,6 +30,7 @@ protoc -I D:/proto \
 - ✅ **Validation**: Comprehensive validation of paths and configuration
 - ✅ **Cross-platform**: Works on Windows, Linux, and macOS
 - ✅ **Forward slash paths**: Uses `/` instead of `\` on Windows for better compatibility
+- ✅ **Protoc availability check**: Early detection with helpful error messages
 - ✅ **No external dependencies**: Pure Go implementation
 
 ## Installation
@@ -45,6 +46,7 @@ This package requires the following tools to be installed and available in PATH:
 1. **protoc** - Protocol Buffers compiler
    - Download from: https://github.com/protocolbuffers/protobuf/releases
    - Add to PATH environment variable
+   - **Note**: The compiler will automatically check if protoc is available and provide helpful installation instructions if not found
 
 2. **Go plugins** (install with Go):
    ```bash
@@ -199,17 +201,69 @@ The package returns descriptive error messages for common issues:
 output, err := protoc.Compile("./proto/sub-folder", "./proto", "./generated")
 if err != nil {
     // Common errors include:
-    // - "proto directory not specified"
-    // - "workspace directory not specified"
-    // - "output directory not specified"
-    // - "proto directory does not exist"
-    // - "workspace directory does not exist"
-    // - "proto directory must be within workspace directory"
-    // - "no .proto files found in [directory]"
-    // - "protoc execution failed: [error]"
+    ### Common Error Messages
+
+    - "proto directory not specified"
+    - "workspace directory not specified"
+    - "output directory not specified"
+    - "proto directory does not exist"
+    - "workspace directory does not exist"
+    - "proto directory must be within workspace directory"
+    - "no .proto files found in [directory]"
+    - "protoc not found in PATH. Please ensure protoc is installed and added to your PATH environment variable."
+    - "protoc execution failed: [error]"
     log.Fatal(err)
 }
 ```
+
+## Protoc Availability Check
+
+The package includes an automatic protoc availability check that runs before attempting compilation. This feature provides helpful error messages with platform-specific installation instructions when protoc is not found in the PATH.
+
+### How It Works
+
+1. **Early Detection**: The check happens after validation but before file discovery
+2. **Platform-Specific Guidance**: Different installation instructions for Windows, macOS, and Linux
+3. **Clear Error Messages**: Actionable instructions instead of confusing "executable not found" errors
+
+### Example Error Messages
+
+**Windows:**
+```
+protoc not found in PATH. Please ensure protoc is installed and added to your PATH environment variable.
+
+To install protoc on Windows:
+1. Download protoc from: https://github.com/protocolbuffers/protobuf/releases
+2. Extract the zip file
+3. Add the 'bin' directory to your PATH environment variable
+4. Restart your terminal or IDE
+```
+
+**macOS:**
+```
+protoc not found in PATH. Please ensure protoc is installed and added to your PATH environment variable.
+
+To install protoc on macOS:
+1. Using Homebrew: brew install protobuf
+2. Or download from: https://github.com/protocolbuffers/protobuf/releases
+```
+
+**Linux:**
+```
+protoc not found in PATH. Please ensure protoc is installed and added to your PATH environment variable.
+
+To install protoc on Linux:
+1. Using apt: sudo apt-get install protobuf-compiler
+2. Using yum: sudo yum install protobuf-compiler
+3. Or download from: https://github.com/protocolbuffers/protobuf/releases
+```
+
+### Benefits
+
+- **Improved User Experience**: Clear guidance instead of confusing errors
+- **Platform-Specific Help**: Tailored instructions for each operating system
+- **Early Failure**: Prevents wasted time on configuration when protoc is missing
+- **PATH Guidance**: Explicit instructions for adding protoc to PATH environment variable
 
 ## Testing
 

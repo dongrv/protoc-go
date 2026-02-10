@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 )
@@ -32,6 +33,11 @@ func (c *compilerImpl) compile() (string, error) {
 
 	// Validate configuration
 	if err := c.validate(); err != nil {
+		return "", err
+	}
+
+	// Check if protoc is available
+	if err := c.checkProtocAvailable(); err != nil {
 		return "", err
 	}
 
@@ -185,6 +191,43 @@ func (c *compilerImpl) buildCommand(files []string) *exec.Cmd {
 	}
 
 	return exec.CommandContext(c.ctx, "protoc", args...)
+}
+
+// checkProtocAvailable checks if protoc is available in the system PATH.
+func (c *compilerImpl) checkProtocAvailable() error {
+	// Try to find protoc in PATH
+	_, err := exec.LookPath("protoc")
+	if err != nil {
+		// Provide helpful error message based on the operating system
+		var platformHint string
+		switch runtime.GOOS {
+		case "windows":
+			platformHint = "\n\nTo install protoc on Windows:\n" +
+				"1. Download protoc from: https://github.com/protocolbuffers/protobuf/releases\n" +
+				"2. Extract the zip file\n" +
+				"3. Add the 'bin' directory to your PATH environment variable\n" +
+				"4. Restart your terminal or IDE"
+		case "darwin":
+			platformHint = "\n\nTo install protoc on macOS:\n" +
+				"1. Using Homebrew: brew install protobuf\n" +
+				"2. Or download from: https://github.com/protocolbuffers/protobuf/releases"
+		case "linux":
+			platformHint = "\n\nTo install protoc on Linux:\n" +
+				"1. Using apt: sudo apt-get install protobuf-compiler\n" +
+				"2. Using yum: sudo yum install protobuf-compiler\n" +
+				"3. Or download from: https://github.com/protocolbuffers/protobuf/releases"
+		default:
+			platformHint = "\n\nPlease install protoc from: https://github.com/protocolbuffers/protobuf/releases"
+		}
+
+		return fmt.Errorf("protoc not found in PATH. Please ensure protoc is installed and added to your PATH environment variable.%s", platformHint)
+	}
+
+	if c.verbose {
+		fmt.Println("✓ protoc found in PATH")
+	}
+
+	return nil
 }
 
 // buildPluginOpts builds the plugin options string.

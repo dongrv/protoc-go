@@ -63,7 +63,7 @@ message Person {
 
 	// Output depends on whether protoc is installed:
 	// If protoc is not installed:
-	//   Compilation failed: protoc execution failed: exec: "protoc": executable file not found in %PATH%
+	//   Compilation failed: protoc not found in PATH. Please ensure protoc is installed and added to your PATH environment variable.
 	//   This may happen if protoc is not installed or if there are other issues.
 	// If protoc is installed:
 	//   Compilation successful
@@ -136,7 +136,7 @@ message HelloResponse {
 
 	// Output depends on whether protoc is installed:
 	// If protoc is not installed:
-	//   Compilation with gRPC support failed: protoc execution failed: exec: "protoc": executable file not found in %PATH%
+	//   Compilation with gRPC support failed: protoc not found in PATH. Please ensure protoc is installed and added to your PATH environment variable.
 	// If protoc is installed:
 	//   Compiled with gRPC support
 	//   Output length: [number] bytes
@@ -320,7 +320,7 @@ message Test {
 
 	// Output depends on whether protoc is installed:
 	// If protoc is not installed:
-	//   Compilation with context failed: protoc execution failed: exec: "protoc": executable file not found in %PATH%
+	//   Compilation with context failed: protoc not found in PATH. Please ensure protoc is installed and added to your PATH environment variable.
 	// If protoc is installed:
 	//   Compiled with context timeout
 }
