@@ -55,7 +55,7 @@ import "github.com/dongrv/protoc-go"
 func main() {
     // Simple function API
     output, err := protoc.Compile(
-        "./proto/act7110",    // Directory containing .proto files
+        "./proto/sub-folder",    // Directory containing .proto files
         "./proto",            // Workspace directory for -I parameter
         "./generated",        // Output directory
     )
@@ -65,7 +65,7 @@ func main() {
     
     // Builder pattern API
     compiler := protoc.NewCompiler().
-        WithProtoDir("./proto/act7110").
+        WithProtoDir("./proto/sub-folder").
         WithProtoWorkSpace("./proto").
         WithOutputDir("./generated").
         WithPlugins("go", "go-grpc").
@@ -132,7 +132,7 @@ func MustCompile(protoDir, workspaceDir, outputDir string) string
 
 ```go
 output, err := protoc.Compile(
-    "./proto/act7110",
+    "./proto/sub-folder",
     "./proto",
     "./generated",
 )
@@ -142,7 +142,7 @@ output, err := protoc.Compile(
 
 ```go
 compiler := protoc.NewCompiler().
-    WithProtoDir("./proto/act7110").
+    WithProtoDir("./proto/sub-folder").
     WithProtoWorkSpace("./proto").
     WithOutputDir("./generated").
     WithPlugins("go", "go-grpc").
@@ -156,7 +156,7 @@ output, err := compiler.Compile()
 
 ```go
 compiler := protoc.NewCompiler().
-    WithProtoDir("./proto/act7110").
+    WithProtoDir("./proto/sub-folder").
     WithProtoWorkSpace("./proto").
     WithOutputDir("./generated").
     WithPlugins("go").
@@ -173,7 +173,7 @@ ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 defer cancel()
 
 compiler := protoc.NewCompiler().
-    WithProtoDir("./proto/act7110").
+    WithProtoDir("./proto/sub-folder").
     WithProtoWorkSpace("./proto").
     WithOutputDir("./generated").
     WithContext(ctx)
@@ -181,37 +181,12 @@ compiler := protoc.NewCompiler().
 output, err := compiler.Compile()
 ```
 
-### Optimization Document Example
-
-This example matches the exact scenario from the optimization document:
-
-```go
-// Directory structure:
-// D:\work\go\src\shengyou\docs\branches\beta\proto\act7110\*.proto
-// D:\work\go\src\shengyou\docs\branches\beta\proto\ (workspace)
-// D:\work\go\src\shengyou\server\branches\beta\protocol\ (output)
-
-compiler := protoc.NewCompiler().
-    WithProtoDir("D:\\work\\go\\src\\shengyou\\docs\\branches\\beta\\proto\\act7110").
-    WithProtoWorkSpace("D:\\work\\go\\src\\shengyou\\docs\\branches\\beta\\proto").
-    WithOutputDir("D:\\work\\go\\src\\shengyou\\server\\branches\\beta\\protocol").
-    WithPlugins("go").
-    WithGoOpts("paths=source_relative")
-
-output, err := compiler.Compile()
-
-// Generates the optimized command:
-// protoc -I D:\work\go\src\shengyou\docs\branches\beta\proto \
-//   --go_out=paths=source_relative:D:\work\go\src\shengyou\server\branches\beta\protocol \
-//   act7110/act7110.proto act7110/debug.proto act7110/enum.proto
-```
-
 ## Error Handling
 
 The package returns descriptive error messages for common issues:
 
 ```go
-output, err := protoc.Compile("./proto/act7110", "./proto", "./generated")
+output, err := protoc.Compile("./proto/sub-folder", "./proto", "./generated")
 if err != nil {
     // Common errors include:
     // - "proto directory not specified"
@@ -225,51 +200,6 @@ if err != nil {
     log.Fatal(err)
 }
 ```
-
-## Standard Command Format Optimization
-
-### The Problem
-
-When compiling Protocol Buffer files, a common issue is the "already defined" error that occurs when duplicate `-I` parameters are used:
-
-```bash
-# Problematic command (causes "already defined" errors):
-protoc -I D:\proto\act7110 -I D:\proto --go_out=... D:\proto\act7110\enum.proto
-```
-
-### The Solution
-
-This package implements the optimized standard command format with a single `-I` parameter:
-
-```bash
-# Optimized command (no duplicate -I parameters):
-protoc -I D:\proto --go_out=... act7110/enum.proto
-```
-
-### Key Optimization Principles
-
-1. **Single -I parameter**: Only the workspace directory is specified with `-I`
-2. **Relative file paths**: All `.proto` files are listed with paths relative to the workspace directory
-3. **Unified output**: All generated files go to a single output directory
-4. **Path validation**: The proto directory must be within the workspace directory
-
-## Design Philosophy
-
-### Simplicity
-
-The API is designed to be intuitive and easy to use. The builder pattern provides a clean, chainable interface that makes configuration straightforward.
-
-### Standards Compliance
-
-The package implements the exact command format recommended in best practices documentation, ensuring compatibility and preventing common compilation errors.
-
-### Robustness
-
-Comprehensive validation ensures that configuration errors are caught early with clear, descriptive error messages.
-
-### Performance
-
-By using the optimized single `-I` parameter approach, the package eliminates the performance overhead and compilation errors associated with duplicate include paths.
 
 ## Testing
 
