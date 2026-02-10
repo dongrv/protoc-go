@@ -204,10 +204,10 @@ message DebugInfo {
 		log.Fatal(err)
 	}
 
-	// Demonstrate the optimized standard command format
+	// Demonstrate the optimized standard command format with forward slashes
 	// This matches the command from the optimization document:
-	// protoc -I D:\work\go\src\shengyou\docs\branches\beta\proto \
-	//   --go_out=paths=source_relative:D:\work\go\src\shengyou\server\branches\beta\protocol \
+	// protoc -I D:/work/go/src/shengyou/docs/branches/beta/proto \
+	//   --go_out=paths=source_relative:D:/work/go/src/shengyou/server/branches/beta/protocol \
 	//   act7110/act7110.proto act7110/debug.proto act7110/enum.proto
 
 	_ = protoc.NewCompiler().
@@ -225,15 +225,19 @@ message DebugInfo {
 	fmt.Println("  Plugins: go")
 	fmt.Println("  Go options: paths=source_relative")
 	fmt.Println()
-	fmt.Println("This configuration generates the optimized command:")
+	fmt.Println("This configuration generates the optimized command with forward slashes:")
 	fmt.Println("  protoc -I <workspace_dir> \\")
 	fmt.Println("    --go_out=paths=source_relative:<output_dir> \\")
 	fmt.Println("    act7110/act7110.proto \\")
 	fmt.Println("    act7110/debug.proto \\")
 	fmt.Println("    act7110/enum.proto")
 	fmt.Println()
+	fmt.Println("On Windows, paths are automatically converted to forward slashes:")
+	fmt.Println("  - D:\\path\\to\\proto becomes D:/path/to/proto")
+	fmt.Println("  - act7110\\enum.proto becomes act7110/enum.proto")
+	fmt.Println()
 	fmt.Println("The optimization prevents 'already defined' errors by using")
-	fmt.Println("only one -I parameter and relative file paths.")
+	fmt.Println("only one -I parameter and relative file paths with forward slashes.")
 
 	// Note: Actual compilation would require protoc to be installed
 	// This example demonstrates the configuration that matches the optimization document
@@ -246,15 +250,19 @@ message DebugInfo {
 	//   Plugins: go
 	//   Go options: paths=source_relative
 	//
-	// This configuration generates the optimized command:
+	// This configuration generates the optimized command with forward slashes:
 	//   protoc -I <workspace_dir> \
 	//     --go_out=paths=source_relative:<output_dir> \
 	//     act7110/act7110.proto \
 	//     act7110/debug.proto \
 	//     act7110/enum.proto
 	//
+	// On Windows, paths are automatically converted to forward slashes:
+	//   - D:\path\to\proto becomes D:/path/to/proto
+	//   - act7110\enum.proto becomes act7110/enum.proto
+	//
 	// The optimization prevents 'already defined' errors by using
-	// only one -I parameter and relative file paths.
+	// only one -I parameter and relative file paths with forward slashes.
 }
 
 // Example_context demonstrates using context for timeout.

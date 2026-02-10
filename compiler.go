@@ -146,21 +146,27 @@ func (c *compilerImpl) buildCommand(files []string) *exec.Cmd {
 	args := []string{}
 
 	// Add workspace directory as single -I parameter
-	args = append(args, "-I", c.workspaceDir)
+	// Use forward slashes for better cross-platform compatibility
+	workspacePath := filepath.ToSlash(c.workspaceDir)
+	args = append(args, "-I", workspacePath)
 
 	// Add plugin outputs
 	for _, plugin := range c.plugins {
 		switch plugin {
 		case "go":
-			args = append(args, "--go_out="+buildPluginOpts("", c.goOpts, c.outputDir))
+			outputPath := filepath.ToSlash(c.outputDir)
+			args = append(args, "--go_out="+buildPluginOpts("", c.goOpts, outputPath))
 		case "go-grpc":
-			args = append(args, "--go-grpc_out="+buildPluginOpts("", c.goGrpcOpts, c.outputDir))
+			outputPath := filepath.ToSlash(c.outputDir)
+			args = append(args, "--go-grpc_out="+buildPluginOpts("", c.goGrpcOpts, outputPath))
 		default:
-			args = append(args, fmt.Sprintf("--%s_out=%s", plugin, c.outputDir))
+			outputPath := filepath.ToSlash(c.outputDir)
+			args = append(args, fmt.Sprintf("--%s_out=%s", plugin, outputPath))
 		}
 	}
 
 	// Add all proto files with paths relative to workspace directory
+	// Use forward slashes for better cross-platform compatibility
 	for _, file := range files {
 		relPath, err := filepath.Rel(c.workspaceDir, file)
 		if err != nil {
@@ -168,8 +174,12 @@ func (c *compilerImpl) buildCommand(files []string) *exec.Cmd {
 			if c.verbose {
 				fmt.Printf("Warning: cannot get relative path for %s: %v\n", file, err)
 			}
-			args = append(args, file)
+			// Use forward slash for absolute paths too
+			filePath := filepath.ToSlash(file)
+			args = append(args, filePath)
 		} else {
+			// Convert relative path to use forward slashes
+			relPath = filepath.ToSlash(relPath)
 			args = append(args, relPath)
 		}
 	}

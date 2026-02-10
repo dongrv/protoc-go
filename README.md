@@ -10,6 +10,15 @@ This package provides a clean Go API for compiling Protocol Buffer files by impl
 protoc -I <workspace_dir> --go_out=paths=source_relative:<output_dir> <relative_proto_files>
 ```
 
+**On Windows, paths use forward slashes for better compatibility:**
+```bash
+protoc -I D:/proto \
+  --go_out=paths=source_relative:D:/go/protocol \
+  demo/demo.proto \
+  demo/debug.proto \
+  demo/enum.proto
+```
+
 ### Key Features
 
 - ✅ **Standard command format**: Implements the optimized single `-I` parameter approach
@@ -20,6 +29,7 @@ protoc -I <workspace_dir> --go_out=paths=source_relative:<output_dir> <relative_
 - ✅ **Context support**: Timeout and cancellation for long-running compilations
 - ✅ **Validation**: Comprehensive validation of paths and configuration
 - ✅ **Cross-platform**: Works on Windows, Linux, and macOS
+- ✅ **Forward slash paths**: Uses `/` instead of `\` on Windows for better compatibility
 - ✅ **No external dependencies**: Pure Go implementation
 
 ## Installation
