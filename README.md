@@ -1,21 +1,24 @@
 # github.com/dongrv/protoc-go
 
-A Go package for compiling Protocol Buffer files on Windows where wildcard patterns are not supported by the `protoc` command.
+A Go package for compiling Protocol Buffer files using the optimized standard command format.
 
 ## Overview
 
-This package solves the problem of compiling multiple `.proto` files in Windows by recursively finding all `.proto` files and constructing the appropriate `protoc` command with all files explicitly listed.
+This package provides a clean Go API for compiling Protocol Buffer files by implementing the optimized standard command format:
 
-### Features
+```bash
+protoc -I <workspace_dir> --go_out=paths=source_relative:<output_dir> <relative_proto_files>
+```
 
-- ✅ **Recursive file discovery**: Automatically finds all `.proto` files in directory trees
-- ✅ **Auto import detection**: Automatically detects import dependencies and adds necessary include paths
-- ✅ **Smart file filtering**: Automatically filters out imported-only files to prevent duplicate compilation errors
-- ✅ **Multiple API styles**: Simple functions, functional options, and builder pattern
+### Key Features
+
+- ✅ **Standard command format**: Implements the optimized single `-I` parameter approach
+- ✅ **Recursive file discovery**: Automatically finds all `.proto` files in a directory
+- ✅ **Builder pattern API**: Clean, chainable configuration methods
 - ✅ **Plugin support**: Built-in support for `go` and `go-grpc` plugins
 - ✅ **Custom options**: Flexible configuration for all protoc plugins
 - ✅ **Context support**: Timeout and cancellation for long-running compilations
-- ✅ **Error handling**: Comprehensive error types with clear messages
+- ✅ **Validation**: Comprehensive validation of paths and configuration
 - ✅ **Cross-platform**: Works on Windows, Linux, and macOS
 - ✅ **No external dependencies**: Pure Go implementation
 
@@ -50,25 +53,24 @@ This package requires the following tools to be installed and available in PATH:
 import "github.com/dongrv/protoc-go"
 
 func main() {
-    // Simple API
-    output, err := protoc.Compile("./proto", "./generated")
+    // Simple function API
+    output, err := protoc.Compile(
+        "./proto/act7110",    // Directory containing .proto files
+        "./proto",            // Workspace directory for -I parameter
+        "./generated",        // Output directory
+    )
     if err != nil {
         log.Fatal(err)
     }
     
-    // Functional options API
-    output, err = protoc.CompileWith(
-        protoc.WithProtoDir("./proto"),
-        protoc.WithOutputDir("./generated"),
-        protoc.WithPlugins("go", "go-grpc"),
-        protoc.WithVerbose(true),
-    )
-    
     // Builder pattern API
     compiler := protoc.NewCompiler().
-        WithProtoDir("./proto").
+        WithProtoDir("./proto/act7110").
+        WithProtoWorkSpace("./proto").
         WithOutputDir("./generated").
         WithPlugins("go", "go-grpc").
+        WithGoOpts("paths=source_relative").
+        WithGoGrpcOpts("paths=source_relative").
         WithVerbose(true)
     
     output, err = compiler.Compile()
@@ -76,63 +78,6 @@ func main() {
 ```
 
 ## API Reference
-
-### Simple Functions
-
-```go
-// Compile compiles .proto files with default options
-func Compile(protoDir, outputDir string) (string, error)
-
-// CompileWith compiles .proto files with functional options
-func CompileWith(opts ...Option) (string, error)
-
-// MustCompile compiles .proto files and panics on error
-func MustCompile(protoDir, outputDir string) string
-
-// MustCompileWith compiles with options and panics on error
-func MustCompileWith(opts ...Option) string
-```
-
-### Functional Options
-
-```go
-// Option configures compilation options
-type Option func(*Options)
-
-// WithProtoDir sets the proto directory
-func WithProtoDir(dir string) Option
-
-// WithOutputDir sets the output directory
-func WithOutputDir(dir string) Option
-
-// WithProtoPaths sets additional proto include paths
-func WithProtoPaths(paths ...string) Option
-
-// WithPlugins sets which plugins to use
-func WithPlugins(plugins ...string) Option
-
-// WithGoOpts sets options for the go plugin
-func WithGoOpts(opts ...string) Option
-
-// WithGoGrpcOpts sets options for the go-grpc plugin
-func WithGoGrpcOpts(opts ...string) Option
-
-// WithVerbose enables verbose output
-func WithVerbose(verbose bool) Option
-
-// WithAutoDetectImports enables or disables automatic import detection
-// When enabled (default), the compiler will automatically detect import
-// dependencies and add necessary include paths.
-func WithAutoDetectImports(enabled bool) Option
-
-// WithSmartFilter enables or disables smart file filtering
-// When enabled (default), the compiler will automatically filter out files
-// that are only imported by other files, preventing duplicate compilation.
-func WithSmartFilter(enabled bool) Option
-
-// WithContext sets the context for cancellation and timeout
-func WithContext(ctx context.Context) Option
-```
 
 ### Compiler Type (Builder Pattern)
 
@@ -143,14 +88,14 @@ type Compiler struct { ... }
 // NewCompiler creates a new Compiler with default options
 func NewCompiler() *Compiler
 
-// WithProtoDir sets the directory containing .proto files
+// WithProtoDir sets the directory containing .proto files to compile
 func (c *Compiler) WithProtoDir(dir string) *Compiler
+
+// WithProtoWorkSpace sets the workspace directory for the -I parameter
+func (c *Compiler) WithProtoWorkSpace(dir string) *Compiler
 
 // WithOutputDir sets the output directory for generated files
 func (c *Compiler) WithOutputDir(dir string) *Compiler
-
-// WithProtoPaths sets additional include paths for protoc
-func (c *Compiler) WithProtoPaths(paths ...string) *Compiler
 
 // WithPlugins sets which protoc plugins to use
 func (c *Compiler) WithPlugins(plugins ...string) *Compiler
@@ -164,39 +109,21 @@ func (c *Compiler) WithGoGrpcOpts(opts ...string) *Compiler
 // WithVerbose enables verbose output
 func (c *Compiler) WithVerbose(verbose bool) *Compiler
 
-// WithAutoDetectImports enables or disables automatic import detection
-// When enabled (default), the compiler will automatically detect import
-// dependencies and add necessary include paths.
-func (c *Compiler) WithAutoDetectImports(enabled bool) *Compiler
-
-// WithSmartFilter enables or disables smart file filtering
-// When enabled (default), the compiler will automatically filter out files
-// that are only imported by other files, preventing duplicate compilation.
-func (c *Compiler) WithSmartFilter(enabled bool) *Compiler
-
 // WithContext sets the context for cancellation and timeout
 func (c *Compiler) WithContext(ctx context.Context) *Compiler
 
-// FindFiles recursively finds all .proto files in the configured directory
-func (c *Compiler) FindFiles() ([]string, error)
-
-// Compile compiles all found .proto files
+// Compile compiles all .proto files in the configured directory
 func (c *Compiler) Compile() (string, error)
 ```
 
-### Error Types
+### Simple Functions
 
 ```go
-// ErrProtocNotFound is returned when protoc command is not found
-var ErrProtocNotFound = errors.New("protoc command not found in PATH")
+// Compile is a convenience function that compiles .proto files
+func Compile(protoDir, workspaceDir, outputDir string) (string, error)
 
-// ErrNoProtoFiles is returned when no .proto files are found
-var ErrNoProtoFiles = errors.New("no .proto files found")
-
-// ErrPluginNotFound is returned when a required plugin is not found
-type ErrPluginNotFound struct {
-    Plugin string
-}
+// MustCompile is like Compile but panics on error
+func MustCompile(protoDir, workspaceDir, outputDir string) string
 ```
 
 ## Examples
@@ -204,211 +131,145 @@ type ErrPluginNotFound struct {
 ### Basic Compilation
 
 ```go
-output, err := protoc.Compile("./proto", "./generated")
+output, err := protoc.Compile(
+    "./proto/act7110",
+    "./proto",
+    "./generated",
+)
 ```
 
 ### With gRPC Support
 
 ```go
-output, err := protoc.CompileWith(
-    protoc.WithProtoDir("./proto"),
-    protoc.WithOutputDir("./generated"),
-    protoc.WithPlugins("go", "go-grpc"),
-    protoc.WithGoOpts("paths=source_relative"),
-    protoc.WithGoGrpcOpts("paths=source_relative"),
-)
-```
-
-### With Custom Module Path
-
-```go
-output, err := protoc.CompileWith(
-    protoc.WithProtoDir("./proto"),
-    protoc.WithOutputDir("./generated"),
-    protoc.WithGoOpts(
-        "paths=source_relative",
-        "module=github.com/yourusername/yourproject",
-    ),
-)
-```
-
-### With Auto Import Detection
-
-```go
-// Compile a subdirectory that imports files from parent directories
-output, err := protoc.CompileWith(
-    protoc.WithProtoDir("./subdir"),
-    protoc.WithOutputDir("./generated"),
-    protoc.WithAutoDetectImports(true), // Automatically find parent directories
-)
-
-// Disable auto import detection for manual control
-output, err := protoc.CompileWith(
-    protoc.WithProtoDir("./subdir"),
-    protoc.WithOutputDir("./generated"),
-    protoc.WithAutoDetectImports(false),
-    protoc.WithProtoPaths(".."), // Manually add parent directory
-)
-```
-
-### With Smart File Filtering
-
-```go
-// Compile with smart filtering (prevents duplicate definition errors)
-output, err := protoc.CompileWith(
-    protoc.WithProtoDir("./proto"),
-    protoc.WithOutputDir("./generated"),
-    protoc.WithSmartFilter(true), // Automatically filter imported-only files
-    protoc.WithVerbose(true),
-)
-
-// Disable smart filtering for manual control
-output, err := protoc.CompileWith(
-    protoc.WithProtoDir("./proto"),
-    protoc.WithOutputDir("./generated"),
-    protoc.WithSmartFilter(false), // Compile all files directly
-    protoc.WithVerbose(true),
-)
-```
-
-### Using Builder Pattern
-
-```go
 compiler := protoc.NewCompiler().
-    WithProtoDir("./proto").
+    WithProtoDir("./proto/act7110").
+    WithProtoWorkSpace("./proto").
     WithOutputDir("./generated").
     WithPlugins("go", "go-grpc").
     WithGoOpts("paths=source_relative").
-    WithGoGrpcOpts("paths=source_relative").
-    WithProtoPaths("./vendor/google/api").
-    WithAutoDetectImports(true). // Enable auto import detection
-    WithSmartFilter(true).      // Enable smart file filtering
-    WithVerbose(true)
+    WithGoGrpcOpts("paths=source_relative")
 
-// Find files first
-files, err := compiler.FindFiles()
-if err != nil {
-    log.Fatal(err)
-}
-
-// Then compile
 output, err := compiler.Compile()
 ```
 
-### With Context for Timeout
+### With Custom Options
+
+```go
+compiler := protoc.NewCompiler().
+    WithProtoDir("./proto/act7110").
+    WithProtoWorkSpace("./proto").
+    WithOutputDir("./generated").
+    WithPlugins("go").
+    WithGoOpts("paths=source_relative", "module=github.com/example/project").
+    WithVerbose(true)
+
+output, err := compiler.Compile()
+```
+
+### Using Context for Timeout
 
 ```go
 ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 defer cancel()
 
-output, err := protoc.CompileWith(
-    protoc.WithProtoDir("./proto"),
-    protoc.WithOutputDir("./generated"),
-    protoc.WithContext(ctx),
-)
+compiler := protoc.NewCompiler().
+    WithProtoDir("./proto/act7110").
+    WithProtoWorkSpace("./proto").
+    WithOutputDir("./generated").
+    WithContext(ctx)
+
+output, err := compiler.Compile()
 ```
 
-## Command Line Tool
+### Optimization Document Example
 
-The package includes a command-line tool in `cmd/protoc-go-compiler/`:
-
-```bash
-# Build the tool
-go build -o protoc-go-compiler ./cmd/protoc-go-compiler
-
-# Basic usage
-protoc-go-compiler -proto-dir=./proto -output-dir=./generated
-
-# With gRPC support
-protoc-go-compiler -plugins=go,go-grpc
-
-# With verbose output
-protoc-go-compiler -verbose
-
-# With smart filtering (prevents duplicate definition errors)
-protoc-go-compiler -smart-filter=true
-
-# Disable smart filtering
-protoc-go-compiler -smart-filter=false
-```
-
-### Integration Examples
-
-#### In a Build Script
+This example matches the exact scenario from the optimization document:
 
 ```go
-// build.go
-package main
+// Directory structure:
+// D:\work\go\src\shengyou\docs\branches\beta\proto\act7110\*.proto
+// D:\work\go\src\shengyou\docs\branches\beta\proto\ (workspace)
+// D:\work\go\src\shengyou\server\branches\beta\protocol\ (output)
 
-import (
-    "log"
-    "github.com/dongrv/protoc-go"
-)
+compiler := protoc.NewCompiler().
+    WithProtoDir("D:\\work\\go\\src\\shengyou\\docs\\branches\\beta\\proto\\act7110").
+    WithProtoWorkSpace("D:\\work\\go\\src\\shengyou\\docs\\branches\\beta\\proto").
+    WithOutputDir("D:\\work\\go\\src\\shengyou\\server\\branches\\beta\\protocol").
+    WithPlugins("go").
+    WithGoOpts("paths=source_relative")
 
-func main() {
-    if _, err := protoc.Compile("./proto", "./generated"); err != nil {
-        log.Fatalf("Failed to compile proto files: %v", err)
-    }
-    log.Println("Proto files compiled successfully")
-}
-```
+output, err := compiler.Compile()
 
-#### Compiling Subdirectories with Dependencies
-
-```go
-// Compile a specific subdirectory that imports from parent directories
-output, err := protoc.CompileWith(
-    protoc.WithProtoDir("./act/act7001"),
-    protoc.WithOutputDir("./generated"),
-    protoc.WithAutoDetectImports(true), // Automatically finds ../act directory
-    protoc.WithSmartFilter(true),      // Prevents duplicate definition errors
-)
-if err != nil {
-    log.Fatalf("Failed to compile act7001: %v", err)
-}
-```
-
-#### In a Makefile
-
-```makefile
-.PHONY: proto
-proto:
-    @echo "Compiling proto files..."
-    @go run ./tools/build.go
-    @echo "Proto compilation complete"
-
-.PHONY: proto-subdir
-proto-subdir:
-    @echo "Compiling subdirectory with auto import detection..."
-    @protoc-go-compiler -proto-dir=./act/act7001 -output-dir=./generated -auto-detect-imports=true -smart-filter=true
-```
-
-#### Using go:generate
-
-```go
-//go:generate go run github.com/dongrv/protoc-go/cmd/protoc-go-compiler -proto-dir=./proto -output-dir=./generated
-
-// For subdirectories with imports
-//go:generate go run github.com/dongrv/protoc-go/cmd/protoc-go-compiler -proto-dir=./act/act7001 -output-dir=./generated -auto-detect-imports=true -smart-filter=true
+// Generates the optimized command:
+// protoc -I D:\work\go\src\shengyou\docs\branches\beta\proto \
+//   --go_out=paths=source_relative:D:\work\go\src\shengyou\server\branches\beta\protocol \
+//   act7110/act7110.proto act7110/debug.proto act7110/enum.proto
 ```
 
 ## Error Handling
 
+The package returns descriptive error messages for common issues:
+
 ```go
-output, err := protoc.Compile("./proto", "./generated")
+output, err := protoc.Compile("./proto/act7110", "./proto", "./generated")
 if err != nil {
-    switch e := err.(type) {
-    case *protoc.ErrPluginNotFound:
-        log.Printf("Plugin not found: %s", e.Plugin)
-    case *protoc.ErrProtocNotFound:
-        log.Fatal("protoc not installed. Please install from: https://github.com/protocolbuffers/protobuf/releases")
-    case *protoc.ErrNoProtoFiles:
-        log.Fatal("No .proto files found in directory")
-    default:
-        log.Fatal(err)
-    }
+    // Common errors include:
+    // - "proto directory not specified"
+    // - "workspace directory not specified"
+    // - "output directory not specified"
+    // - "proto directory does not exist"
+    // - "workspace directory does not exist"
+    // - "proto directory must be within workspace directory"
+    // - "no .proto files found in [directory]"
+    // - "protoc execution failed: [error]"
+    log.Fatal(err)
 }
 ```
+
+## Standard Command Format Optimization
+
+### The Problem
+
+When compiling Protocol Buffer files, a common issue is the "already defined" error that occurs when duplicate `-I` parameters are used:
+
+```bash
+# Problematic command (causes "already defined" errors):
+protoc -I D:\proto\act7110 -I D:\proto --go_out=... D:\proto\act7110\enum.proto
+```
+
+### The Solution
+
+This package implements the optimized standard command format with a single `-I` parameter:
+
+```bash
+# Optimized command (no duplicate -I parameters):
+protoc -I D:\proto --go_out=... act7110/enum.proto
+```
+
+### Key Optimization Principles
+
+1. **Single -I parameter**: Only the workspace directory is specified with `-I`
+2. **Relative file paths**: All `.proto` files are listed with paths relative to the workspace directory
+3. **Unified output**: All generated files go to a single output directory
+4. **Path validation**: The proto directory must be within the workspace directory
+
+## Design Philosophy
+
+### Simplicity
+
+The API is designed to be intuitive and easy to use. The builder pattern provides a clean, chainable interface that makes configuration straightforward.
+
+### Standards Compliance
+
+The package implements the exact command format recommended in best practices documentation, ensuring compatibility and preventing common compilation errors.
+
+### Robustness
+
+Comprehensive validation ensures that configuration errors are caught early with clear, descriptive error messages.
+
+### Performance
+
+By using the optimized single `-I` parameter approach, the package eliminates the performance overhead and compilation errors associated with duplicate include paths.
 
 ## Testing
 
@@ -421,7 +282,7 @@ go test ./...
 Run examples:
 
 ```bash
-go run ./usage_example.go
+go test -v -run Example ./...
 ```
 
 ## Contributing
@@ -442,56 +303,3 @@ MIT License
 - [Protocol Buffers](https://developers.google.com/protocol-buffers)
 - [protoc-gen-go](https://pkg.go.dev/google.golang.org/protobuf)
 - [protoc-gen-go-grpc](https://pkg.go.dev/google.golang.org/grpc/cmd/protoc-gen-go-grpc)
-
-## Why This Package?
-
-On Windows, the `protoc` command doesn't support wildcard patterns like `*.proto` or `**/*.proto`. This makes it difficult to compile all `.proto` files in a directory tree. This package solves this problem by:
-
-1. Recursively finding all `.proto` files
-2. Building a `protoc` command with all files explicitly listed
-3. Providing a clean Go API for integration into build systems
-4. **Auto import detection**: Automatically finding and adding necessary include paths for imports
-
-### Solving Import Dependencies
-
-A common problem when compiling Protocol Buffer files is handling imports between directories. For example:
-- Directory `act7001/` contains `act7001.proto` that imports `../act/common.proto`
-- When compiling only `act7001/` directory, protoc cannot find the imported file
-- Files like `enum.proto` that are imported by other files may be compiled twice, causing duplicate definition errors
-
-This package solves these problems with:
-
-### Auto Import Detection
-- Automatically parses `.proto` files to find import statements
-- Searches for imported files in parent and sibling directories
-- Adds necessary include paths to the protoc command
-- Works with nested directory structures
-
-### Smart File Filtering
-- Automatically detects files that are only imported by other files
-- Filters out imported-only files from direct compilation
-- Prevents duplicate definition errors
-- Reduces compilation time by avoiding redundant work
-- Preserves files with service definitions and standalone files
-
-### Path Deduplication Optimization
-- **Prevents "already defined" errors**: When duplicate `-I` paths are provided, protoc may treat the same file as different entities, causing compilation errors
-- **Automatic deduplication**: The package automatically removes duplicate include paths, even when they're specified in different formats (absolute vs relative paths)
-- **Standard library compliance**: Uses Go's standard `filepath.Abs()` to normalize paths before comparison
-- **Optimized for Windows**: Handles Windows path separators and case-insensitive file systems correctly
-
-#### Example Problem Solved:
-```bash
-# Problematic command (causes "already defined" errors):
-protoc -I D:\proto\act7110 -I D:\proto --go_out=... D:\proto\act7110\enum.proto
-
-# With path deduplication, this becomes:
-protoc -I D:\proto --go_out=... D:\proto\act7110\enum.proto
-```
-
-The package is designed to be:
-- **Simple**: Easy to use with minimal configuration
-- **Flexible**: Multiple API styles to suit different use cases
-- **Smart**: Automatic import detection, smart filtering, and path deduplication for complex dependency graphs
-- **Robust**: Comprehensive error handling and validation
-- **Standard**: Follows Go conventions and best practices

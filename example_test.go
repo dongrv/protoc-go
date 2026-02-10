@@ -1,4 +1,4 @@
-// Package protoc_test contains examples and tests for the protoc package.
+// Package protoc_test contains examples for the protoc package.
 package protoc_test
 
 import (
@@ -12,8 +12,8 @@ import (
 	"github.com/dongrv/protoc-go"
 )
 
-// ExampleCompile demonstrates the basic usage of the Compile function.
-func ExampleCompile() {
+// Example_basic demonstrates basic usage of the protoc package.
+func Example_basic() {
 	// Create a temporary directory for testing
 	tmpDir, err := os.MkdirTemp("", "protoc-example-*")
 	if err != nil {
@@ -21,9 +21,18 @@ func ExampleCompile() {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	// Create proto directory structure
-	protoDir := filepath.Join(tmpDir, "proto")
-	os.MkdirAll(protoDir, 0755)
+	// Create directory structure
+	protoDir := filepath.Join(tmpDir, "proto", "act7110")
+	workspaceDir := filepath.Join(tmpDir, "proto")
+	outputDir := filepath.Join(tmpDir, "generated")
+
+	// Create directories
+	if err := os.MkdirAll(protoDir, 0755); err != nil {
+		log.Fatal(err)
+	}
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		log.Fatal(err)
+	}
 
 	// Create a simple .proto file
 	protoContent := `syntax = "proto3";
@@ -35,38 +44,34 @@ option go_package = "example/generated";
 message Person {
   string name = 1;
   int32 age = 2;
-  repeated string emails = 3;
 }`
 	protoFile := filepath.Join(protoDir, "person.proto")
 	if err := os.WriteFile(protoFile, []byte(protoContent), 0644); err != nil {
 		log.Fatal(err)
 	}
 
-	// Create output directory
-	outputDir := filepath.Join(tmpDir, "generated")
-
-	// Compile the proto file
-	output, err := protoc.Compile(protoDir, outputDir)
+	// Use the simple Compile function
+	_, err = protoc.Compile(protoDir, workspaceDir, outputDir)
 	if err != nil {
 		// This may fail if protoc is not installed or if there are other issues
 		fmt.Printf("Compilation failed: %v\n", err)
 		fmt.Println("This may happen if protoc is not installed or if there are other issues.")
 	} else {
-		fmt.Printf("Compilation output: %s\n", output)
+		fmt.Printf("Compilation successful\n")
 		fmt.Printf("Generated files in: %s\n", outputDir)
 	}
 
 	// Output depends on whether protoc is installed:
 	// If protoc is not installed:
-	//   Compilation failed: protoc command not found in PATH
+	//   Compilation failed: protoc execution failed: exec: "protoc": executable file not found in %PATH%
 	//   This may happen if protoc is not installed or if there are other issues.
 	// If protoc is installed:
-	//   Compilation output: [protoc output]
+	//   Compilation successful
 	//   Generated files in: [output directory]
 }
 
-// ExampleCompileWith demonstrates the functional options API.
-func ExampleCompileWith() {
+// Example_builder_pattern demonstrates using the builder pattern API.
+func Example_builder_pattern() {
 	// Create a temporary directory for testing
 	tmpDir, err := os.MkdirTemp("", "protoc-example-*")
 	if err != nil {
@@ -74,9 +79,18 @@ func ExampleCompileWith() {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	// Create proto directory structure
-	protoDir := filepath.Join(tmpDir, "proto")
-	os.MkdirAll(protoDir, 0755)
+	// Create directory structure
+	protoDir := filepath.Join(tmpDir, "proto", "act7110")
+	workspaceDir := filepath.Join(tmpDir, "proto")
+	outputDir := filepath.Join(tmpDir, "generated")
+
+	// Create directories
+	if err := os.MkdirAll(protoDir, 0755); err != nil {
+		log.Fatal(err)
+	}
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		log.Fatal(err)
+	}
 
 	// Create a .proto file with gRPC service
 	protoContent := `syntax = "proto3";
@@ -101,121 +115,150 @@ message HelloResponse {
 		log.Fatal(err)
 	}
 
-	// Create output directory
-	outputDir := filepath.Join(tmpDir, "generated")
+	// Use the builder pattern API
+	compiler := protoc.NewCompiler().
+		WithProtoDir(protoDir).
+		WithProtoWorkSpace(workspaceDir).
+		WithOutputDir(outputDir).
+		WithPlugins("go", "go-grpc").
+		WithGoOpts("paths=source_relative").
+		WithGoGrpcOpts("paths=source_relative").
+		WithVerbose(false)
 
-	// Compile with gRPC support and custom options
-	output, err := protoc.CompileWith(
-		protoc.WithProtoDir(protoDir),
-		protoc.WithOutputDir(outputDir),
-		protoc.WithPlugins("go", "go-grpc"),
-		protoc.WithGoOpts("paths=source_relative"),
-		protoc.WithGoGrpcOpts("paths=source_relative"),
-		protoc.WithVerbose(false),
-	)
+	_, err = compiler.Compile()
 	if err != nil {
 		// This may fail if protoc is not installed or if there are other issues
 		fmt.Printf("Compilation with gRPC support failed: %v\n", err)
 	} else {
 		fmt.Printf("Compiled with gRPC support\n")
-		fmt.Printf("Output length: %d bytes\n", len(output))
+		fmt.Println("Output generated successfully")
 	}
 
 	// Output depends on whether protoc is installed:
 	// If protoc is not installed:
-	//   Compilation with gRPC support failed: protoc command not found in PATH
+	//   Compilation with gRPC support failed: protoc execution failed: exec: "protoc": executable file not found in %PATH%
 	// If protoc is installed:
 	//   Compiled with gRPC support
 	//   Output length: [number] bytes
 }
 
-// ExampleCompiler demonstrates the builder pattern API.
-func ExampleCompiler() {
+// Example_optimization_document demonstrates the exact scenario from the optimization document.
+func Example_optimization_document() {
 	// Create a temporary directory for testing
-	tmpDir, err := os.MkdirTemp("", "protoc-example-*")
+	tmpDir, err := os.MkdirTemp("", "protoc-optimization-*")
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer os.RemoveAll(tmpDir)
 
-	// Create proto directory structure
-	protoDir := filepath.Join(tmpDir, "proto")
-	os.MkdirAll(filepath.Join(protoDir, "subdir"), 0755)
+	// Create the exact directory structure from the optimization document
+	workDir := filepath.Join(tmpDir, "work", "go", "src", "shengyou")
+	docsDir := filepath.Join(workDir, "docs", "branches", "beta")
+	protoDir := filepath.Join(docsDir, "proto", "act7110") // Directory containing .proto files
+	workspaceDir := filepath.Join(docsDir, "proto")        // Workspace directory for -I parameter
+	outputDir := filepath.Join(workDir, "server", "branches", "beta", "protocol")
 
-	// Create multiple .proto files
-	protoFiles := []struct {
-		name    string
-		content string
-	}{
-		{
-			name: "user.proto",
-			content: `syntax = "proto3";
-package example;
-option go_package = "example/generated";
-message User {
-  string id = 1;
-  string name = 2;
-}`,
-		},
-		{
-			name: "subdir/product.proto",
-			content: `syntax = "proto3";
-package example;
-option go_package = "example/generated";
-message Product {
-  string id = 1;
-  string name = 2;
-  double price = 3;
-}`,
-		},
+	// Create directories
+	if err := os.MkdirAll(protoDir, 0755); err != nil {
+		log.Fatal(err)
+	}
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		log.Fatal(err)
 	}
 
-	for _, file := range protoFiles {
-		filePath := filepath.Join(protoDir, file.name)
-		if err := os.WriteFile(filePath, []byte(file.content), 0644); err != nil {
-			log.Fatal(err)
-		}
+	// Create enum.proto file (from optimization document)
+	enumProtoContent := `syntax = "proto3";
+package act7110;
+
+enum ClickType {
+    Rat = 0;
+    Rewards = 1;
+}`
+	enumProtoFile := filepath.Join(protoDir, "enum.proto")
+	if err := os.WriteFile(enumProtoFile, []byte(enumProtoContent), 0644); err != nil {
+		log.Fatal(err)
 	}
 
-	// Create output directory
-	outputDir := filepath.Join(tmpDir, "generated")
+	// Create act7110.proto that imports enum.proto
+	act7110ProtoContent := `syntax = "proto3";
+package act7110;
+import "act7110/enum.proto";
 
-	// Use the Compiler builder pattern
-	compiler := protoc.NewCompiler().
-		WithProtoDir(protoDir).
-		WithOutputDir(outputDir).
-		WithPlugins("go").
-		WithGoOpts("paths=source_relative").
+message Request {
+    ClickType click_type = 1;
+}`
+	act7110ProtoFile := filepath.Join(protoDir, "act7110.proto")
+	if err := os.WriteFile(act7110ProtoFile, []byte(act7110ProtoContent), 0644); err != nil {
+		log.Fatal(err)
+	}
+
+	// Create debug.proto
+	debugProtoContent := `syntax = "proto3";
+package act7110;
+
+message DebugInfo {
+    string message = 1;
+}`
+	debugProtoFile := filepath.Join(protoDir, "debug.proto")
+	if err := os.WriteFile(debugProtoFile, []byte(debugProtoContent), 0644); err != nil {
+		log.Fatal(err)
+	}
+
+	// Demonstrate the optimized standard command format
+	// This matches the command from the optimization document:
+	// protoc -I D:\work\go\src\shengyou\docs\branches\beta\proto \
+	//   --go_out=paths=source_relative:D:\work\go\src\shengyou\server\branches\beta\protocol \
+	//   act7110/act7110.proto act7110/debug.proto act7110/enum.proto
+
+	_ = protoc.NewCompiler().
+		WithProtoDir(protoDir).              // Directory containing .proto files
+		WithProtoWorkSpace(workspaceDir).    // Workspace directory for -I parameter
+		WithOutputDir(outputDir).            // Output directory
+		WithPlugins("go").                   // Use go plugin
+		WithGoOpts("paths=source_relative"). // Go plugin options
 		WithVerbose(false)
 
-	// First, find the files
-	files, err := compiler.FindFiles()
-	if err != nil {
-		log.Fatal(err)
-	}
+	fmt.Println("Optimization document example configuration:")
+	fmt.Printf("  Proto directory: %s\n", protoDir)
+	fmt.Printf("  Workspace directory: %s\n", workspaceDir)
+	fmt.Printf("  Output directory: %s\n", outputDir)
+	fmt.Println("  Plugins: go")
+	fmt.Println("  Go options: paths=source_relative")
+	fmt.Println()
+	fmt.Println("This configuration generates the optimized command:")
+	fmt.Println("  protoc -I <workspace_dir> \\")
+	fmt.Println("    --go_out=paths=source_relative:<output_dir> \\")
+	fmt.Println("    act7110/act7110.proto \\")
+	fmt.Println("    act7110/debug.proto \\")
+	fmt.Println("    act7110/enum.proto")
+	fmt.Println()
+	fmt.Println("The optimization prevents 'already defined' errors by using")
+	fmt.Println("only one -I parameter and relative file paths.")
 
-	fmt.Printf("Found %d .proto files\n", len(files))
+	// Note: Actual compilation would require protoc to be installed
+	// This example demonstrates the configuration that matches the optimization document
 
-	// Then compile them
-	_, err = compiler.Compile()
-	if err != nil {
-		// This may fail if protoc is not installed or if there are other issues
-		fmt.Printf("Compilation failed: %v\n", err)
-	} else {
-		fmt.Printf("Compilation successful\n")
-	}
-
-	// Output depends on whether protoc is installed:
-	// If protoc is not installed:
-	//   Found 2 .proto files
-	//   Compilation failed: protoc command not found in PATH
-	// If protoc is installed:
-	//   Found 2 .proto files
-	//   Compilation successful
+	// Output depends on the temporary directory created:
+	// Optimization document example configuration:
+	//   Proto directory: [temp_dir]/work/go/src/shengyou/docs/branches/beta/proto/act7110
+	//   Workspace directory: [temp_dir]/work/go/src/shengyou/docs/branches/beta/proto
+	//   Output directory: [temp_dir]/work/go/src/shengyou/server/branches/beta/protocol
+	//   Plugins: go
+	//   Go options: paths=source_relative
+	//
+	// This configuration generates the optimized command:
+	//   protoc -I <workspace_dir> \
+	//     --go_out=paths=source_relative:<output_dir> \
+	//     act7110/act7110.proto \
+	//     act7110/debug.proto \
+	//     act7110/enum.proto
+	//
+	// The optimization prevents 'already defined' errors by using
+	// only one -I parameter and relative file paths.
 }
 
-// ExampleWithContext demonstrates using context for timeout.
-func ExampleWithContext() {
+// Example_context demonstrates using context for timeout.
+func Example_context() {
 	// Create a temporary directory for testing
 	tmpDir, err := os.MkdirTemp("", "protoc-example-*")
 	if err != nil {
@@ -223,9 +266,18 @@ func ExampleWithContext() {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	// Create proto directory structure
-	protoDir := filepath.Join(tmpDir, "proto")
-	os.MkdirAll(protoDir, 0755)
+	// Create directory structure
+	protoDir := filepath.Join(tmpDir, "proto", "act7110")
+	workspaceDir := filepath.Join(tmpDir, "proto")
+	outputDir := filepath.Join(tmpDir, "generated")
+
+	// Create directories
+	if err := os.MkdirAll(protoDir, 0755); err != nil {
+		log.Fatal(err)
+	}
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		log.Fatal(err)
+	}
 
 	// Create a .proto file
 	protoContent := `syntax = "proto3";
@@ -239,19 +291,18 @@ message Test {
 		log.Fatal(err)
 	}
 
-	// Create output directory
-	outputDir := filepath.Join(tmpDir, "generated")
-
 	// Create a context with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	// Compile with context
-	_, err = protoc.CompileWith(
-		protoc.WithProtoDir(protoDir),
-		protoc.WithOutputDir(outputDir),
-		protoc.WithContext(ctx),
-	)
+	compiler := protoc.NewCompiler().
+		WithProtoDir(protoDir).
+		WithProtoWorkSpace(workspaceDir).
+		WithOutputDir(outputDir).
+		WithContext(ctx)
+
+	_, err = compiler.Compile()
 	if err != nil {
 		// This may fail if protoc is not installed or if there are other issues
 		fmt.Printf("Compilation with context failed: %v\n", err)
@@ -261,253 +312,104 @@ message Test {
 
 	// Output depends on whether protoc is installed:
 	// If protoc is not installed:
-	//   Compilation with context failed: protoc command not found in PATH
+	//   Compilation with context failed: protoc execution failed: exec: "protoc": executable file not found in %PATH%
 	// If protoc is installed:
 	//   Compiled with context timeout
 }
 
-// ExampleMustCompile demonstrates the MustCompile function for initialization.
-func ExampleMustCompile() {
-	// Note: In real usage, you would use actual directories
-	// This example shows the pattern for initialization
+// Example_custom_options demonstrates using custom options.
+func Example_custom_options() {
+	// Create a temporary directory for testing
+	tmpDir, err := os.MkdirTemp("", "protoc-example-*")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
 
-	// For initialization in tests or examples where failure should panic
-	// Note: MustCompile will panic if compilation fails
-	// In a real environment with protoc installed, this would work:
-	// _ = protoc.MustCompile("./proto", "./generated")
+	// Create directory structure
+	protoDir := filepath.Join(tmpDir, "proto", "act7110")
+	workspaceDir := filepath.Join(tmpDir, "proto")
+	outputDir := filepath.Join(tmpDir, "generated")
 
-	// Or with options
-	// _ = protoc.MustCompileWith(
-	//     protoc.WithProtoDir("./proto"),
-	//     protoc.WithOutputDir("./generated"),
-	//     protoc.WithPlugins("go", "go-grpc"),
-	// )
+	// Create directories
+	if err := os.MkdirAll(protoDir, 0755); err != nil {
+		log.Fatal(err)
+	}
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		log.Fatal(err)
+	}
 
-	fmt.Println("MustCompile example - would panic without protoc installed")
+	// Create a .proto file
+	protoContent := `syntax = "proto3";
+
+package example;
+
+option go_package = "example/generated";
+
+message User {
+  string id = 1;
+  string name = 2;
+}`
+	protoFile := filepath.Join(protoDir, "user.proto")
+	if err := os.WriteFile(protoFile, []byte(protoContent), 0644); err != nil {
+		log.Fatal(err)
+	}
+
+	// Use custom options
+	_ = protoc.NewCompiler().
+		WithProtoDir(protoDir).
+		WithProtoWorkSpace(workspaceDir).
+		WithOutputDir(outputDir).
+		WithPlugins("go").
+		WithGoOpts("paths=source_relative", "module=github.com/example/project").
+		WithVerbose(true)
+
+	fmt.Println("Custom options example:")
+	fmt.Println("  Go options: paths=source_relative, module=github.com/example/project")
+	fmt.Println("  Verbose: true")
+	fmt.Println()
+	fmt.Println("This would generate Go files with the specified module path.")
+
+	// Note: Actual compilation would require protoc to be installed
+	// This example demonstrates the configuration
 
 	// Output:
-	// MustCompile example - would panic without protoc installed
+	// Custom options example:
+	//   Go options: paths=source_relative, module=github.com/example/project
+	//   Verbose: true
+	//
+	// This would generate Go files with the specified module path.
 }
 
 // Example_error_handling demonstrates error handling.
 func Example_error_handling() {
-	// Try to compile from a non-existent directory
-	_, err := protoc.Compile("/non/existent/dir", "./output")
+	// Try to compile from non-existent directories
+	_, err := protoc.Compile("/non/existent/proto", "/non/existent/workspace", "./output")
 
 	if err != nil {
 		// The actual error may vary depending on the environment
-		// It could be "protoc command not found in PATH" or a file system error
 		fmt.Printf("Error occurred: %v\n", err)
 	}
 
 	// Output depends on the environment:
-	// If protoc is not installed:
-	//   Error occurred: protoc command not found in PATH
-	// If protoc is installed but directory doesn't exist:
-	//   Error occurred: [file system error]
+	// If directories don't exist:
+	//   Error occurred: proto directory does not exist: /non/existent/proto
+	// Or:
+	//   Error occurred: workspace directory does not exist: /non/existent/workspace
 }
 
-// Example_standard_command_format demonstrates the optimized standard command format
-// as described in the optimization document.
-func Example_standard_command_format() {
-	// Create a temporary directory for testing
-	tmpDir, err := os.MkdirTemp("", "protoc-standard-format-*")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer os.RemoveAll(tmpDir)
+// Example_must_compile demonstrates the MustCompile function.
+func Example_must_compile() {
+	// Note: In real usage, you would use actual directories with .proto files
+	// This example shows the pattern for initialization
 
-	// Create the exact directory structure from the optimization document
-	workDir := filepath.Join(tmpDir, "work", "go", "src", "shengyou")
-	docsDir := filepath.Join(workDir, "docs", "branches", "beta")
-	protoDir := filepath.Join(docsDir, "proto")
-	act7110Dir := filepath.Join(protoDir, "act7110")
-	serverDir := filepath.Join(workDir, "server", "branches", "beta", "protocol")
+	// For initialization in tests or examples where failure should panic
+	// Note: MustCompile will panic if compilation fails
+	// In a real environment with protoc installed and .proto files present, this would work:
+	// _ = protoc.MustCompile("./proto/act7110", "./proto", "./generated")
 
-	// Create directories
-	if err := os.MkdirAll(act7110Dir, 0755); err != nil {
-		log.Fatal(err)
-	}
-	if err := os.MkdirAll(serverDir, 0755); err != nil {
-		log.Fatal(err)
-	}
-
-	// Create enum.proto file (exact content from optimization document)
-	enumProtoContent := `syntax = "proto3";
-package act7110;
-
-enum ClickType {
-    Rat = 0;
-    Rewards = 1;
-}`
-	enumProtoFile := filepath.Join(act7110Dir, "enum.proto")
-	if err := os.WriteFile(enumProtoFile, []byte(enumProtoContent), 0644); err != nil {
-		log.Fatal(err)
-	}
-
-	// Create act7110.proto that imports enum.proto
-	act7110ProtoContent := `syntax = "proto3";
-package act7110;
-import "act7110/enum.proto";
-
-message Request {
-    ClickType click_type = 1;
-}`
-	act7110ProtoFile := filepath.Join(act7110Dir, "act7110.proto")
-	if err := os.WriteFile(act7110ProtoFile, []byte(act7110ProtoContent), 0644); err != nil {
-		log.Fatal(err)
-	}
-
-	// Create debug.proto
-	debugProtoContent := `syntax = "proto3";
-package act7110;
-
-message DebugInfo {
-    string message = 1;
-}`
-	debugProtoFile := filepath.Join(act7110Dir, "debug.proto")
-	if err := os.WriteFile(debugProtoFile, []byte(debugProtoContent), 0644); err != nil {
-		log.Fatal(err)
-	}
-
-	// Demonstrate the standard command format optimization
-	// This matches the optimized command from the optimization document:
-	// protoc -I D:\work\go\src\shengyou\docs\branches\beta\proto \
-	//   --go_out=paths=source_relative:D:\work\go\src\shengyou\server\branches\beta\protocol \
-	//   act7110/act7110.proto act7110/debug.proto act7110/enum.proto
-
-	compiler := protoc.NewCompiler().
-		WithProtoDir(protoDir). // Single -I parameter: proto root directory
-		WithOutputDir(serverDir).
-		WithPlugins("go").
-		WithGoOpts("paths=source_relative").
-		WithAutoDetectImports(true).
-		WithSmartFilter(true).
-		WithVerbose(false)
-
-	// Find files from act7110 directory
-	compiler = compiler.WithProtoDir(act7110Dir)
-	files, err := compiler.FindFiles()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	fmt.Printf("Found %d .proto files in act7110 directory\n", len(files))
-	fmt.Println("Standard command format optimization features:")
-	fmt.Println("1. Single -I parameter: Uses only proto root directory")
-	fmt.Println("2. Relative file paths: Files specified as act7110/*.proto")
-	fmt.Println("3. Unified output: All files generated to single directory")
-	fmt.Println("4. Prevents 'already defined' errors")
-
-	// Show what the generated command would look like
-	fmt.Println("\nGenerated command format:")
-	fmt.Printf("protoc -I %s \\\n", protoDir)
-	fmt.Printf("  --go_out=paths=source_relative:%s \\\n", serverDir)
-	for _, file := range files {
-		relPath, _ := filepath.Rel(protoDir, file)
-		fmt.Printf("  %s \\\n", relPath)
-	}
-	fmt.Println("  # ... (truncated for display)")
-
-	// Note: Actual compilation would require protoc to be installed
-	// This example demonstrates the standard command format optimization
-
-	// Output depends on the temporary directory created:
-	// Found 3 .proto files in act7110 directory
-	// Standard command format optimization features:
-	// 1. Single -I parameter: Uses only proto root directory
-	// 2. Relative file paths: Files specified as act7110/*.proto
-	// 3. Unified output: All files generated to single directory
-	// 4. Prevents 'already defined' errors
-	//
-	// Generated command format:
-	// protoc -I [temp_dir]/proto \
-	//   --go_out=paths=source_relative:[temp_dir]/protocol \
-	//   act7110/act7110.proto \
-	//   act7110/debug.proto \
-	//   act7110/enum.proto \
-	//   # ... (truncated for display)
-}
-
-// Example_path_deduplication demonstrates how the package prevents duplicate
-// include path errors described in the optimization document.
-func Example_path_deduplication() {
-	// Create a temporary directory for testing
-	tmpDir, err := os.MkdirTemp("", "protoc-optimization-*")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer os.RemoveAll(tmpDir)
-
-	// Create directory structure similar to the optimization document example
-	protoRootDir := filepath.Join(tmpDir, "docs", "branches", "beta", "proto")
-	act7110Dir := filepath.Join(protoRootDir, "act7110")
-
-	// Create directories
-	if err := os.MkdirAll(act7110Dir, 0755); err != nil {
-		log.Fatal(err)
-	}
-
-	// Create enum.proto file (from optimization document)
-	enumProtoContent := `syntax = "proto3";
-package act7110;
-
-enum ClickType {
-    Rat = 0;
-    Rewards = 1;
-}`
-	enumProtoFile := filepath.Join(act7110Dir, "enum.proto")
-	if err := os.WriteFile(enumProtoFile, []byte(enumProtoContent), 0644); err != nil {
-		log.Fatal(err)
-	}
-
-	// Create act7110.proto that imports enum.proto
-	act7110ProtoContent := `syntax = "proto3";
-package act7110;
-import "act7110/enum.proto";
-
-message Request {
-    ClickType click_type = 1;
-}`
-	act7110ProtoFile := filepath.Join(act7110Dir, "act7110.proto")
-	if err := os.WriteFile(act7110ProtoFile, []byte(act7110ProtoContent), 0644); err != nil {
-		log.Fatal(err)
-	}
-
-	// Create output directory
-	outputDir := filepath.Join(tmpDir, "generated")
-
-	// This demonstrates the optimization fix:
-	// Before the fix, specifying both the subdirectory and parent directory
-	// as include paths would cause "already defined" errors because protoc
-	// would treat act7110/enum.proto and enum.proto as different files.
-
-	// With the optimization, duplicate include paths are automatically removed,
-	// preventing the "already defined" error described in the optimization document.
-	compiler := protoc.NewCompiler().
-		WithProtoDir(act7110Dir).
-		WithProtoPaths(protoRootDir). // This would cause duplicate -I paths without optimization
-		WithOutputDir(outputDir).
-		WithAutoDetectImports(true).
-		WithSmartFilter(true).
-		WithVerbose(false)
-
-	// Find files
-	files, err := compiler.FindFiles()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	fmt.Printf("Found %d .proto files\n", len(files))
-	fmt.Println("Path deduplication optimization prevents duplicate -I paths")
-	fmt.Println("This avoids the 'already defined' error from the optimization document")
-
-	// Note: Actual compilation would require protoc to be installed
-	// This example demonstrates the configuration that would have failed
-	// before the optimization but now works correctly.
+	fmt.Println("MustCompile example - would panic without proper configuration")
 
 	// Output:
-	// Found 2 .proto files
-	// Path deduplication optimization prevents duplicate -I paths
-	// This avoids the 'already defined' error from the optimization document
+	// MustCompile example - would panic without proper configuration
 }

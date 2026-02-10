@@ -1,23 +1,27 @@
-// Package protoc provides a Go API for compiling Protocol Buffer files on Windows
-// where wildcard patterns are not supported by the protoc command.
+// Package protoc provides a Go API for compiling Protocol Buffer files.
 //
-// This package solves the problem of compiling multiple .proto files in Windows
-// by recursively finding all .proto files and constructing the appropriate
-// protoc command with all files explicitly listed.
+// This package solves the problem of compiling multiple .proto files by
+// recursively finding all .proto files in a directory and constructing
+// the appropriate protoc command with all files explicitly listed.
 //
-// The package implements the optimized standard command format from best practices:
-//   - Single -I parameter: Uses only one include path (proto root directory)
-//   - Relative file paths: All .proto files are specified with paths relative to the -I directory
-//   - Smart file filtering: Filters out imported-only files to prevent duplicate compilation
-//   - Auto import validation: Validates that all imports can be resolved relative to the include directory
+// The package implements the optimized standard command format:
+//   - Single -I parameter using workspace directory
+//   - Relative file paths from workspace to proto files
+//   - Explicit listing of all .proto files to compile
 //
 // # Overview
 //
-// The package provides three levels of API:
+// The package provides a builder pattern API through the Compiler type:
 //
-// 1. Simple function API: Compile, CompileWith, MustCompile
-// 2. Functional options API: WithProtoDir, WithOutputDir, etc.
-// 3. Builder pattern API: Compiler type with method chaining
+//	compiler := protoc.NewCompiler().
+//	    WithProtoDir("./proto/act7110").
+//	    WithProtoWorkSpace("./proto").
+//	    WithOutputDir("./generated").
+//	    WithPlugins("go", "go-grpc").
+//	    WithGoOpts("paths=source_relative").
+//	    WithVerbose(true)
+//
+//	output, err := compiler.Compile()
 //
 // # Installation
 //
@@ -39,24 +43,23 @@
 //
 //	func main() {
 //	    // Simple API
-//	    output, err := protoc.Compile("./proto", "./generated")
+//	    output, err := protoc.Compile(
+//	        "./proto/act7110",    // proto directory
+//	        "./proto",            // workspace directory
+//	        "./generated",        // output directory
+//	    )
 //	    if err != nil {
 //	        log.Fatal(err)
 //	    }
 //
-//	    // Functional options API
-//	    output, err = protoc.CompileWith(
-//	        protoc.WithProtoDir("./proto"),
-//	        protoc.WithOutputDir("./generated"),
-//	        protoc.WithPlugins("go", "go-grpc"),
-//	        protoc.WithVerbose(true),
-//	    )
-//
 //	    // Builder pattern API
 //	    compiler := protoc.NewCompiler().
-//	        WithProtoDir("./proto").
+//	        WithProtoDir("./proto/act7110").
+//	        WithProtoWorkSpace("./proto").
 //	        WithOutputDir("./generated").
 //	        WithPlugins("go", "go-grpc").
+//	        WithGoOpts("paths=source_relative").
+//	        WithGoGrpcOpts("paths=source_relative").
 //	        WithVerbose(true)
 //
 //	    output, err = compiler.Compile()
@@ -64,89 +67,84 @@
 //
 // # API Reference
 //
-// ## Simple Functions
-//
-//	func Compile(protoDir, outputDir string) (string, error)
-//	func CompileWith(opts ...Option) (string, error)
-//	func MustCompile(protoDir, outputDir string) string
-//	func MustCompileWith(opts ...Option) string
-//
-// ## Functional Options
-//
-//	func WithProtoDir(dir string) Option
-//	func WithOutputDir(dir string) Option
-//	func WithProtoPaths(paths ...string) Option
-//	func WithPlugins(plugins ...string) Option
-//	func WithGoOpts(opts ...string) Option
-//	func WithGoGrpcOpts(opts ...string) Option
-//	func WithVerbose(verbose bool) Option
-//	func WithContext(ctx context.Context) Option
-//
 // ## Compiler Type
 //
 //	type Compiler struct { ... }
 //
 //	func NewCompiler() *Compiler
 //	func (c *Compiler) WithProtoDir(dir string) *Compiler
+//	func (c *Compiler) WithProtoWorkSpace(dir string) *Compiler
 //	func (c *Compiler) WithOutputDir(dir string) *Compiler
-//	func (c *Compiler) WithProtoPaths(paths ...string) *Compiler
 //	func (c *Compiler) WithPlugins(plugins ...string) *Compiler
 //	func (c *Compiler) WithGoOpts(opts ...string) *Compiler
 //	func (c *Compiler) WithGoGrpcOpts(opts ...string) *Compiler
 //	func (c *Compiler) WithVerbose(verbose bool) *Compiler
 //	func (c *Compiler) WithContext(ctx context.Context) *Compiler
-//	func (c *Compiler) FindFiles() ([]string, error)
 //	func (c *Compiler) Compile() (string, error)
+//
+// ## Simple Functions
+//
+//	func Compile(protoDir, workspaceDir, outputDir string) (string, error)
+//	func MustCompile(protoDir, workspaceDir, outputDir string) string
 //
 // # Examples
 //
 // ## Basic Compilation
 //
-//	output, err := protoc.Compile("./proto", "./generated")
+//	output, err := protoc.Compile(
+//	    "./proto/act7110",
+//	    "./proto",
+//	    "./generated",
+//	)
 //
 // ## With gRPC Support
 //
-//	output, err := protoc.CompileWith(
-//	    protoc.WithProtoDir("./proto"),
-//	    protoc.WithOutputDir("./generated"),
-//	    protoc.WithPlugins("go", "go-grpc"),
-//	)
-//
-// ## With Custom Options
-//
-//	output, err := protoc.CompileWith(
-//	    protoc.WithProtoDir("./proto"),
-//	    protoc.WithOutputDir("./generated"),
-//	    protoc.WithGoOpts("paths=source_relative", "module=github.com/example/project"),
-//	    protoc.WithGoGrpcOpts("paths=source_relative"),
-//	    protoc.WithProtoPaths("./proto", "./vendor"),
-//	    protoc.WithVerbose(true),
-//	)
-//
-// ## Using Builder Pattern
-//
 //	compiler := protoc.NewCompiler().
-//	    WithProtoDir("./proto").
+//	    WithProtoDir("./proto/act7110").
+//	    WithProtoWorkSpace("./proto").
 //	    WithOutputDir("./generated").
 //	    WithPlugins("go", "go-grpc").
 //	    WithGoOpts("paths=source_relative").
-//	    WithGoGrpcOpts("paths=source_relative").
-//	    WithProtoPaths("./vendor/google/api").
-//	    WithVerbose(true)
+//	    WithGoGrpcOpts("paths=source_relative")
 //
-//	files, err := compiler.FindFiles()
+//	output, err := compiler.Compile()
+//
+// ## With Custom Options
+//
+//	compiler := protoc.NewCompiler().
+//	    WithProtoDir("./proto/act7110").
+//	    WithProtoWorkSpace("./proto").
+//	    WithOutputDir("./generated").
+//	    WithPlugins("go").
+//	    WithGoOpts("paths=source_relative", "module=github.com/example/project")
+//
+//	output, err := compiler.Compile()
+//
+// ## Using Context for Timeout
+//
+//	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+//	defer cancel()
+//
+//	compiler := protoc.NewCompiler().
+//	    WithProtoDir("./proto/act7110").
+//	    WithProtoWorkSpace("./proto").
+//	    WithOutputDir("./generated").
+//	    WithContext(ctx)
+//
 //	output, err := compiler.Compile()
 //
 // # Error Handling
 //
-// The package defines the following error types:
+// The package returns descriptive error messages for common issues:
 //
-//	var ErrProtocNotFound = errors.New("protoc command not found in PATH")
-//	var ErrNoProtoFiles = errors.New("no .proto files found")
-//
-//	type ErrPluginNotFound struct {
-//	    Plugin string
-//	}
+//   - "proto directory not specified"
+//   - "workspace directory not specified"
+//   - "output directory not specified"
+//   - "proto directory does not exist"
+//   - "workspace directory does not exist"
+//   - "proto directory must be within workspace directory"
+//   - "no .proto files found in [directory]"
+//   - "protoc execution failed: [error]"
 //
 // # Notes
 //
@@ -155,8 +153,8 @@
 //   - The package automatically creates the output directory if it doesn't exist.
 //   - Uses the optimized standard command format with single -I parameter to prevent
 //     "already defined" errors.
-//   - All .proto files are specified with paths relative to the include directory.
-//   - The package validates that required tools (protoc, plugins) are in PATH.
+//   - All .proto files are specified with paths relative to the workspace directory.
+//   - The proto directory must be within the workspace directory.
 //   - Context support allows for cancellation and timeout of long-running compilations.
 //   - Implements the exact optimization recommended in best practices documentation.
 //
