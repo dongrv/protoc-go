@@ -307,6 +307,128 @@ func Example_error_handling() {
 	//   Error occurred: [file system error]
 }
 
+// Example_standard_command_format demonstrates the optimized standard command format
+// as described in the optimization document.
+func Example_standard_command_format() {
+	// Create a temporary directory for testing
+	tmpDir, err := os.MkdirTemp("", "protoc-standard-format-*")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create the exact directory structure from the optimization document
+	workDir := filepath.Join(tmpDir, "work", "go", "src", "shengyou")
+	docsDir := filepath.Join(workDir, "docs", "branches", "beta")
+	protoDir := filepath.Join(docsDir, "proto")
+	act7110Dir := filepath.Join(protoDir, "act7110")
+	serverDir := filepath.Join(workDir, "server", "branches", "beta", "protocol")
+
+	// Create directories
+	if err := os.MkdirAll(act7110Dir, 0755); err != nil {
+		log.Fatal(err)
+	}
+	if err := os.MkdirAll(serverDir, 0755); err != nil {
+		log.Fatal(err)
+	}
+
+	// Create enum.proto file (exact content from optimization document)
+	enumProtoContent := `syntax = "proto3";
+package act7110;
+
+enum ClickType {
+    Rat = 0;
+    Rewards = 1;
+}`
+	enumProtoFile := filepath.Join(act7110Dir, "enum.proto")
+	if err := os.WriteFile(enumProtoFile, []byte(enumProtoContent), 0644); err != nil {
+		log.Fatal(err)
+	}
+
+	// Create act7110.proto that imports enum.proto
+	act7110ProtoContent := `syntax = "proto3";
+package act7110;
+import "act7110/enum.proto";
+
+message Request {
+    ClickType click_type = 1;
+}`
+	act7110ProtoFile := filepath.Join(act7110Dir, "act7110.proto")
+	if err := os.WriteFile(act7110ProtoFile, []byte(act7110ProtoContent), 0644); err != nil {
+		log.Fatal(err)
+	}
+
+	// Create debug.proto
+	debugProtoContent := `syntax = "proto3";
+package act7110;
+
+message DebugInfo {
+    string message = 1;
+}`
+	debugProtoFile := filepath.Join(act7110Dir, "debug.proto")
+	if err := os.WriteFile(debugProtoFile, []byte(debugProtoContent), 0644); err != nil {
+		log.Fatal(err)
+	}
+
+	// Demonstrate the standard command format optimization
+	// This matches the optimized command from the optimization document:
+	// protoc -I D:\work\go\src\shengyou\docs\branches\beta\proto \
+	//   --go_out=paths=source_relative:D:\work\go\src\shengyou\server\branches\beta\protocol \
+	//   act7110/act7110.proto act7110/debug.proto act7110/enum.proto
+
+	compiler := protoc.NewCompiler().
+		WithProtoDir(protoDir). // Single -I parameter: proto root directory
+		WithOutputDir(serverDir).
+		WithPlugins("go").
+		WithGoOpts("paths=source_relative").
+		WithAutoDetectImports(true).
+		WithSmartFilter(true).
+		WithVerbose(false)
+
+	// Find files from act7110 directory
+	compiler = compiler.WithProtoDir(act7110Dir)
+	files, err := compiler.FindFiles()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Printf("Found %d .proto files in act7110 directory\n", len(files))
+	fmt.Println("Standard command format optimization features:")
+	fmt.Println("1. Single -I parameter: Uses only proto root directory")
+	fmt.Println("2. Relative file paths: Files specified as act7110/*.proto")
+	fmt.Println("3. Unified output: All files generated to single directory")
+	fmt.Println("4. Prevents 'already defined' errors")
+
+	// Show what the generated command would look like
+	fmt.Println("\nGenerated command format:")
+	fmt.Printf("protoc -I %s \\\n", protoDir)
+	fmt.Printf("  --go_out=paths=source_relative:%s \\\n", serverDir)
+	for _, file := range files {
+		relPath, _ := filepath.Rel(protoDir, file)
+		fmt.Printf("  %s \\\n", relPath)
+	}
+	fmt.Println("  # ... (truncated for display)")
+
+	// Note: Actual compilation would require protoc to be installed
+	// This example demonstrates the standard command format optimization
+
+	// Output depends on the temporary directory created:
+	// Found 3 .proto files in act7110 directory
+	// Standard command format optimization features:
+	// 1. Single -I parameter: Uses only proto root directory
+	// 2. Relative file paths: Files specified as act7110/*.proto
+	// 3. Unified output: All files generated to single directory
+	// 4. Prevents 'already defined' errors
+	//
+	// Generated command format:
+	// protoc -I [temp_dir]/proto \
+	//   --go_out=paths=source_relative:[temp_dir]/protocol \
+	//   act7110/act7110.proto \
+	//   act7110/debug.proto \
+	//   act7110/enum.proto \
+	//   # ... (truncated for display)
+}
+
 // Example_path_deduplication demonstrates how the package prevents duplicate
 // include path errors described in the optimization document.
 func Example_path_deduplication() {

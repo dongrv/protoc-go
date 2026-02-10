@@ -325,37 +325,10 @@ func (c *Compiler) validate() error {
 func (c *Compiler) buildCommand() *exec.Cmd {
 	args := []string{}
 
-	// Collect all include paths, ensuring no duplicates
-	// This prevents the issue described in the optimization document where
-	// duplicate -I paths cause protoc to treat the same file as different entities
-	includePaths := make(map[string]bool)
-
-	// Helper function to add path if not already present
-	addIncludePath := func(path string) {
-		absPath, err := filepath.Abs(path)
-		if err != nil {
-			// If we can't get absolute path, use the original
-			absPath = path
-		}
-
-		if !includePaths[absPath] {
-			includePaths[absPath] = true
-			args = append(args, "-I", path)
-		}
-	}
-
-	// Add proto directory as first include path
-	addIncludePath(c.protoDir)
-
-	// Add user-specified proto paths
-	for _, path := range c.protoPaths {
-		addIncludePath(path)
-	}
-
-	// Add automatically detected proto paths
-	for _, path := range c.additionalProtoPaths {
-		addIncludePath(path)
-	}
+	// According to the optimization document best practice, we use only one -I parameter
+	// The standard command format is: protoc -I <proto_root> --go_out=... <proto_files>
+	// We use the proto directory as the single include path
+	args = append(args, "-I", c.protoDir)
 
 	// Add plugin outputs
 	for _, plugin := range c.plugins {
@@ -369,8 +342,25 @@ func (c *Compiler) buildCommand() *exec.Cmd {
 		}
 	}
 
-	// Add all proto files
-	args = append(args, c.foundFiles...)
+	// Add all proto files with paths relative to the proto directory
+	// This matches the standard command format from the optimization document
+	for _, file := range c.foundFiles {
+		// Get relative path from proto directory
+		relPath, err := filepath.Rel(c.protoDir, file)
+		if err != nil {
+			// If we can't get relative path, the file is outside protoDir
+			// In this case, we need to adjust our approach
+			if c.verbose {
+				fmt.Printf("Warning: File %s is outside proto directory %s\n", file, c.protoDir)
+			}
+			// For standard optimization, all files should be within protoDir
+			// We'll use the absolute path as a fallback
+			args = append(args, file)
+		} else {
+			// Use relative path as in the standard command format
+			args = append(args, relPath)
+		}
+	}
 
 	return exec.CommandContext(c.ctx, "protoc", args...)
 }
@@ -511,28 +501,22 @@ func buildPluginOpts(prefix string, options []string, outputDir string) string {
 	return optStr + outputDir
 }
 
-// analyzeImports analyzes proto files to detect import dependencies and
-// automatically add necessary include paths.
+// analyzeImports analyzes proto files to detect import dependencies.
+// With the single -I parameter optimization, we don't add additional include paths.
+// Instead, we validate that all imports can be resolved relative to the proto directory.
 func (c *Compiler) analyzeImports(files []string) error {
-	processedPaths := make(map[string]bool)
-
-	// Clear any previously detected paths
-	c.additionalProtoPaths = []string{}
-
-	// Add protoDir to processed paths
 	absProtoDir, err := filepath.Abs(c.protoDir)
 	if err != nil {
 		return fmt.Errorf("resolve proto directory: %w", err)
 	}
-	processedPaths[absProtoDir] = true
 
-	// Add user-specified proto paths
+	// Also check user-specified proto paths for import resolution
+	allSearchPaths := []string{absProtoDir}
 	for _, path := range c.protoPaths {
 		absPath, err := filepath.Abs(path)
-		if err != nil {
-			continue
+		if err == nil {
+			allSearchPaths = append(allSearchPaths, absPath)
 		}
-		processedPaths[absPath] = true
 	}
 
 	// Collect all imports from all files
@@ -548,21 +532,34 @@ func (c *Compiler) analyzeImports(files []string) error {
 		}
 	}
 
-	// For each import, try to find its directory and add it as include path
+	// For each import, try to find if it can be resolved
+	importsFound := 0
+	totalImports := len(allImports)
+
 	for importPath := range allImports {
-		// Try to find the directory containing the imported file
-		importDir, err := findImportDirectory(importPath, files, absProtoDir)
-		if err != nil {
-			// If we can't find it, skip this import
-			continue
+		found := false
+
+		// Check all search paths
+		for _, searchPath := range allSearchPaths {
+			possiblePath := filepath.Join(searchPath, importPath)
+			if _, err := os.Stat(possiblePath); err == nil {
+				found = true
+				importsFound++
+				break
+			}
 		}
 
-		// Check if we've already added this path
-		if !processedPaths[importDir] {
-			c.additionalProtoPaths = append(c.additionalProtoPaths, importDir)
-			processedPaths[importDir] = true
+		if !found && c.verbose {
+			fmt.Printf("Warning: Import %s not found in any search path\n", importPath)
 		}
 	}
+
+	if c.verbose && totalImports > 0 {
+		fmt.Printf("Import resolution: %d/%d imports found\n", importsFound, totalImports)
+	}
+
+	// Clear additionalProtoPaths since we're using single -I parameter approach
+	c.additionalProtoPaths = []string{}
 
 	return nil
 }

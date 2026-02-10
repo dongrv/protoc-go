@@ -11,7 +11,6 @@ This package solves the problem of compiling multiple `.proto` files in Windows 
 - ✅ **Recursive file discovery**: Automatically finds all `.proto` files in directory trees
 - ✅ **Auto import detection**: Automatically detects import dependencies and adds necessary include paths
 - ✅ **Smart file filtering**: Automatically filters out imported-only files to prevent duplicate compilation errors
-- ✅ **Path deduplication**: Automatically removes duplicate include paths to prevent "already defined" errors
 - ✅ **Multiple API styles**: Simple functions, functional options, and builder pattern
 - ✅ **Plugin support**: Built-in support for `go` and `go-grpc` plugins
 - ✅ **Custom options**: Flexible configuration for all protoc plugins

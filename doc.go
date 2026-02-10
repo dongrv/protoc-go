@@ -5,11 +5,11 @@
 // by recursively finding all .proto files and constructing the appropriate
 // protoc command with all files explicitly listed.
 //
-// The package includes optimizations to prevent common protoc errors:
-//   - Path deduplication: Automatically removes duplicate include paths to prevent
-//     "already defined" errors when the same file is referenced through different paths
+// The package implements the optimized standard command format from best practices:
+//   - Single -I parameter: Uses only one include path (proto root directory)
+//   - Relative file paths: All .proto files are specified with paths relative to the -I directory
 //   - Smart file filtering: Filters out imported-only files to prevent duplicate compilation
-//   - Auto import detection: Automatically finds and adds necessary include paths for imports
+//   - Auto import validation: Validates that all imports can be resolved relative to the include directory
 //
 // # Overview
 //
@@ -153,12 +153,12 @@
 //   - This package is particularly useful on Windows where protoc doesn't support
 //     wildcard patterns like `*.proto`.
 //   - The package automatically creates the output directory if it doesn't exist.
-//   - All paths are resolved to absolute paths before use, with automatic deduplication
-//     to prevent "already defined" errors.
+//   - Uses the optimized standard command format with single -I parameter to prevent
+//     "already defined" errors.
+//   - All .proto files are specified with paths relative to the include directory.
 //   - The package validates that required tools (protoc, plugins) are in PATH.
 //   - Context support allows for cancellation and timeout of long-running compilations.
-//   - Path deduplication prevents the common issue where duplicate -I paths cause
-//     protoc to treat the same file as different entities.
+//   - Implements the exact optimization recommended in best practices documentation.
 //
 // # See Also
 //
